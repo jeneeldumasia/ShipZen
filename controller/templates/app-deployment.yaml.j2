@@ -4,7 +4,7 @@ metadata:
   name: {{ deployment_name }}-secrets
   namespace: {{ namespace }}
   labels:
-    deployhub.io/project: "{{ project_name }}"
+    deployhub.jeneeldumasia.codes/project: "{{ project_name }}"
 spec:
   refreshInterval: "1h"
   secretStoreRef:
@@ -25,7 +25,7 @@ metadata:
   namespace: {{ namespace }}
   labels:
     app: {{ deployment_name }}
-    deployhub.io/project: "{{ project_name }}"
+    deployhub.jeneeldumasia.codes/project: "{{ project_name }}"
 spec:
   replicas: {{ replicas | default(1) }}
   selector:
@@ -35,7 +35,25 @@ spec:
     metadata:
       labels:
         app: {{ deployment_name }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ port | default(8080) }}"
+        prometheus.io/path: "/metrics"
     spec:
+      # Fix #5.4: toleration to schedule on the dedicated tenant NodePool.
+      # Tenant nodes are tainted deployhub.jeneeldumasia.codes/dedicated=tenant:NoSchedule
+      # so builder workloads cannot mix with tenant app pods.
+      tolerations:
+        - key: deployhub.jeneeldumasia.codes/dedicated
+          operator: Equal
+          value: tenant
+          effect: NoSchedule
+      # Fix #8.8: imagePullSecret so tenant pods can pull built images from ECR.
+      # The ecr-pull-secret is created per-namespace by the controller when
+      # provisioning the tenant namespace (via a Kubernetes Job that runs
+      # `aws ecr get-login-password` and creates the secret).
+      imagePullSecrets:
+        - name: ecr-pull-secret
       containers:
         - name: app
           image: {{ image_uri }}
@@ -52,7 +70,7 @@ metadata:
   namespace: {{ namespace }}
   labels:
     app: {{ deployment_name }}
-    deployhub.io/project: "{{ project_name }}"
+    deployhub.jeneeldumasia.codes/project: "{{ project_name }}"
 spec:
   selector:
     app: {{ deployment_name }}
@@ -67,13 +85,13 @@ metadata:
   name: {{ deployment_name }}-route
   namespace: {{ namespace }}
   labels:
-    deployhub.io/project: "{{ project_name }}"
+    deployhub.jeneeldumasia.codes/project: "{{ project_name }}"
 spec:
   parentRefs:
     - name: deployhub-gateway
       namespace: deployhub-system
   hostnames:
-    - "{{ project_name }}.deployhub.io"
+    - "{{ deployment_id[:8] }}.{{ project_name }}.deployhub.jeneeldumasia.codes"
   rules:
     - backendRefs:
         - name: {{ deployment_name }}-svc
@@ -85,9 +103,13 @@ metadata:
   name: {{ deployment_name }}-pdb
   namespace: {{ namespace }}
   labels:
-    deployhub.io/project: "{{ project_name }}"
+    deployhub.jeneeldumasia.codes/project: "{{ project_name }}"
 spec:
-  minAvailable: 1
+  # Fix #19: minAvailable: 1 on a single-replica deployment makes the pod
+  # permanently un-evictable, blocking Karpenter consolidation and node drains.
+  # Use maxUnavailable: 1 instead — this allows voluntary evictions while
+  # still protecting multi-replica deployments from losing all pods at once.
+  maxUnavailable: 1
   selector:
     matchLabels:
       app: {{ deployment_name }}

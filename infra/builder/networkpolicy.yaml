@@ -15,9 +15,10 @@ spec:
           port: 53 # DNS
         - protocol: TCP
           port: 53
-    # Allow egress to Internet (GitHub, Container Registries, etc)
-    # Block internal Kubernetes CIDRs (e.g. 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-    # Block AWS Metadata endpoint 169.254.169.254
+    # Allow egress to Internet for GitHub (HTTPS only) and Container Registries.
+    # Block internal Kubernetes CIDRs and AWS Metadata endpoint.
+    # Fix #22: removed port 22 (SSH). git clone over SSH to arbitrary
+    # internet hosts is an exfiltration risk. Only HTTPS is needed.
     - to:
         - ipBlock:
             cidr: 0.0.0.0/0
@@ -31,8 +32,6 @@ spec:
           port: 443
         - protocol: TCP
           port: 80
-        - protocol: TCP
-          port: 22 # Git over SSH
     
     # Exception for Redis Queue (Build Dependency) in deployhub-system
     - to:

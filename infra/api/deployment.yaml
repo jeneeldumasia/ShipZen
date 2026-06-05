@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployhub-api
+  namespace: deployhub-system
+  labels:
+    app: deployhub-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: deployhub-api
+  template:
+    metadata:
+      labels:
+        app: deployhub-api
+    spec:
+      serviceAccountName: deployhub-api-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: deployhub-api:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deployhub-db-credentials
+                  key: url
+            - name: REDIS_HOST
+              value: "redis-master.deployhub-system.svc.cluster.local"
+            - name: STREAM_NAME
+              value: "deploy_stream"
+            - name: ECR_REPOSITORY_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deployhub-ecr-config
+                  key: repository_url
+            - name: AUTH0_DOMAIN
+              valueFrom:
+                secretKeyRef:
+                  name: deployhub-auth0
+                  key: domain
+                  optional: true
+            - name: AUTH0_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: deployhub-auth0
+                  key: audience
+                  optional: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10

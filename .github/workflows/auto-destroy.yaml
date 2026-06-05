@@ -1,0 +1,76 @@
+name: Auto-Destroy (Deadman Switch)
+
+# Runs every hour. If the EKS cluster has been alive for more than 4 hours,
+# it triggers the destroy workflow automatically to protect credits.
+# Adjust MAX_UPTIME_HOURS to your preference.
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Every hour on the hour
+  workflow_dispatch:     # Also allow manual trigger for testing
+
+permissions:
+  id-token: write
+  contents: read
+  actions: write # Required to trigger the destroy workflow
+
+env:
+  MAX_UPTIME_HOURS: 4
+  CLUSTER_NAME: deployhub-cluster
+  AWS_REGION: us-east-1
+
+jobs:
+  check-and-destroy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check Cluster Uptime
+        id: check
+        run: |
+          # Check if the cluster exists at all
+          CREATED_AT=$(aws eks describe-cluster \
+            --name "$CLUSTER_NAME" \
+            --query "cluster.createdAt" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$CREATED_AT" ] || [ "$CREATED_AT" = "None" ]; then
+            echo "Cluster not found. Nothing to destroy."
+            echo "should_destroy=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Calculate uptime in hours
+          CREATED_EPOCH=$(date -d "$CREATED_AT" +%s)
+          NOW_EPOCH=$(date +%s)
+          UPTIME_SECONDS=$((NOW_EPOCH - CREATED_EPOCH))
+          UPTIME_HOURS=$(echo "scale=2; $UPTIME_SECONDS / 3600" | bc)
+
+          echo "Cluster created at: $CREATED_AT"
+          echo "Uptime: ${UPTIME_HOURS} hours (limit: ${MAX_UPTIME_HOURS}h)"
+
+          if [ "$UPTIME_SECONDS" -gt $((MAX_UPTIME_HOURS * 3600)) ]; then
+            echo "⚠️  Cluster has exceeded ${MAX_UPTIME_HOURS}h uptime. Triggering auto-destroy."
+            echo "should_destroy=true" >> $GITHUB_OUTPUT
+            echo "uptime_hours=$UPTIME_HOURS" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Cluster within allowed uptime. No action needed."
+            echo "should_destroy=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger Destroy Workflow
+        if: steps.check.outputs.should_destroy == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'destroy.yaml',
+              ref: 'main'
+            });
+            console.log(`Auto-destroy triggered. Cluster uptime was ${{ steps.check.outputs.uptime_hours }} hours.`);

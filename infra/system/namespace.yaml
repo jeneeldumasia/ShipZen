@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: deployhub-system
+  labels:
+    deployhub.jeneeldumasia.codes/system: "true"
+    # Allow platform pods to run without the restricted PSS
+    # (worker, controller, and API server are trusted platform components)
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest

@@ -1,0 +1,57 @@
+# Local testing stack — API + PostgreSQL + Redis
+# Mirrors the in-cluster setup as closely as possible.
+# Usage:
+#   docker compose up --build
+#   Then run: scripts/test-api.sh   (or use curl manually — see README below)
+
+services:
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: deployhub
+      POSTGRES_USER: deployhub
+      POSTGRES_PASSWORD: deployhub-local
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deployhub -d deployhub"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      # Apply schema automatically on first start
+      - ./api/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://deployhub:deployhub-local@postgres:5432/deployhub
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      STREAM_NAME: deploy_stream
+      # In production this is set from `terraform output ecr_repository_url`
+      # For local testing a placeholder is fine — builder isn't running locally
+      ECR_REPOSITORY_URL: "local/deployhub-builds"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Reload on code changes during local dev
+    volumes:
+      - ./api:/app

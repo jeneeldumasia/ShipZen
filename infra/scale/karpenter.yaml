@@ -12,6 +12,9 @@ spec:
     - tags:
         karpenter.sh/discovery: "DeployHub"
 ---
+# Builder NodePool — for build jobs only.
+# Tainted so only builder pods (which carry the matching toleration) can schedule here.
+# Tenant and platform workloads cannot land on these nodes.
 apiVersion: karpenter.sh/v1beta1
 kind: NodePool
 metadata:
@@ -25,20 +28,25 @@ spec:
           values: ["amd64", "arm64"]
         - key: karpenter.sh/capacity-type
           operator: In
-          values: ["spot", "on-demand"] # Spot preferred, on-demand fallback
+          values: ["spot", "on-demand"]
         - key: karpenter.k8s.aws/instance-category
           operator: In
           values: ["c", "m", "r"]
       nodeClassRef:
         name: deployhub-default
       taints:
-        - key: deployhub.io/dedicated
+        - key: deployhub.jeneeldumasia.codes/dedicated
           value: builder
           effect: NoSchedule
   disruption:
     consolidationPolicy: WhenUnderutilized
-    expireAfter: 720h # 30 Days
+    expireAfter: 720h
 ---
+# Tenant NodePool — for user application workloads.
+# Fix #5.4: added a taint so tenant pods cannot accidentally schedule on builder
+# nodes (which are sized for heavy CPU/memory builds, not app serving).
+# Tenant pods carry the matching toleration injected by the controller template.
+# Platform pods (controller, worker, API) go to the managed node group instead.
 apiVersion: karpenter.sh/v1beta1
 kind: NodePool
 metadata:
@@ -52,11 +60,15 @@ spec:
           values: ["amd64", "arm64"]
         - key: karpenter.sh/capacity-type
           operator: In
-          values: ["on-demand"] # Tenants get stable on-demand nodes
+          values: ["on-demand"]
         - key: karpenter.k8s.aws/instance-category
           operator: In
           values: ["m", "t3"]
       nodeClassRef:
         name: deployhub-default
+      taints:
+        - key: deployhub.jeneeldumasia.codes/dedicated
+          value: tenant
+          effect: NoSchedule
   disruption:
     consolidationPolicy: WhenUnderutilized

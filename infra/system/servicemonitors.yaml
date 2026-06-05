@@ -1,0 +1,116 @@
+# Task 9 / fix #6.4: ServiceMonitor and headless Service resources so
+# Prometheus can scrape worker, controller, and API server metrics.
+# Previously no ServiceMonitors existed — none of the custom metrics
+# (queue depth, drift total, reconciliation duration) were ever scraped.
+
+# ── Worker metrics service ────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: deployhub-worker-metrics
+  namespace: deployhub-system
+  labels:
+    app: deployhub-worker
+    deployhub.jeneeldumasia.codes/metrics: "true"
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless — Prometheus connects directly to pod IPs
+  selector:
+    app: deployhub-worker
+  ports:
+    - name: metrics
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: deployhub-worker
+  namespace: deployhub-system
+  labels:
+    # kube-prometheus-stack discovers ServiceMonitors by this label
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      deployhub.jeneeldumasia.codes/metrics: "true"
+      app: deployhub-worker
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+---
+# ── Controller metrics service ────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: deployhub-controller-metrics
+  namespace: deployhub-system
+  labels:
+    app: deployhub-controller
+    deployhub.jeneeldumasia.codes/metrics: "true"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: deployhub-controller
+  ports:
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: deployhub-controller
+  namespace: deployhub-system
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      deployhub.jeneeldumasia.codes/metrics: "true"
+      app: deployhub-controller
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+---
+# ── API server metrics service ────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: deployhub-api-metrics
+  namespace: deployhub-system
+  labels:
+    app: deployhub-api
+    deployhub.jeneeldumasia.codes/metrics: "true"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: deployhub-api
+  ports:
+    - name: metrics
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: deployhub-api
+  namespace: deployhub-system
+  labels:
+    release: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      deployhub.jeneeldumasia.codes/metrics: "true"
+      app: deployhub-api
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics

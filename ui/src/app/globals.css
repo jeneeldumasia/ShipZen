@@ -1,0 +1,149 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --canvas-bg: #f8fafc;
+    --canvas-card: rgba(255, 255, 255, 0.7);
+    --canvas-border: rgba(226, 232, 240, 0.8);
+    
+    --sidebar-bg: rgba(248, 250, 252, 0.8);
+    --sidebar-border: rgba(226, 232, 240, 0.8);
+    --sidebar-hover: rgba(241, 245, 249, 0.9);
+    --sidebar-active: #10b981;
+    --sidebar-text: #64748b;
+    --sidebar-heading: #0f172a;
+    
+    --brand-default: #10b981;
+    --brand-hover: #059669;
+    --brand-light: #ecfdf5;
+    --brand-muted: #34d399;
+    --brand-glow: rgba(16, 185, 129, 0.4);
+
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+  }
+
+  .dark {
+    --canvas-bg: #09090b;
+    --canvas-card: rgba(24, 24, 27, 0.6);
+    --canvas-border: rgba(39, 39, 42, 0.8);
+    
+    --sidebar-bg: rgba(9, 9, 11, 0.8);
+    --sidebar-border: rgba(39, 39, 42, 0.8);
+    --sidebar-hover: rgba(39, 39, 42, 0.9);
+    --sidebar-active: #10b981;
+    --sidebar-text: #a1a1aa;
+    --sidebar-heading: #fafafa;
+    
+    --brand-default: #34d399;
+    --brand-hover: #10b981;
+    --brand-light: rgba(16, 185, 129, 0.15);
+    --brand-muted: #6ee7b7;
+    --brand-glow: rgba(52, 211, 153, 0.4);
+
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background-color: var(--canvas-bg);
+    color: var(--text-primary);
+    transition: background-color 0.3s ease, color 0.3s ease;
+  }
+
+  /* Animated background mesh */
+  .bg-mesh {
+    background-image: 
+      radial-gradient(at 40% 20%, hsla(160, 100%, 70%, 0.1) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, hsla(150, 100%, 56%, 0.1) 0px, transparent 50%),
+      radial-gradient(at 0% 50%, hsla(170, 100%, 80%, 0.1) 0px, transparent 50%);
+    background-size: 200% 200%;
+    animation: meshShift 15s ease infinite alternate;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar        { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track  { background: transparent; }
+  ::-webkit-scrollbar-thumb  { background: var(--canvas-border); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--sidebar-text); }
+}
+
+@layer components {
+  /* Sidebar nav item */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-sidebar-text
+           hover:bg-sidebar-hover hover:text-sidebar-heading transition-all duration-300 cursor-pointer;
+  }
+
+  .nav-item.active {
+    @apply bg-sidebar-active text-white shadow-md shadow-brand/20;
+  }
+
+  /* Card base (Glassmorphism) */
+  .card {
+    @apply bg-canvas-card backdrop-blur-md border border-canvas-border rounded-xl shadow-card
+           transition-all duration-300 hover:shadow-card-hover hover:border-brand/30;
+  }
+
+  /* Input base */
+  .input {
+    @apply w-full border border-canvas-border rounded-lg px-3 py-2 text-sm
+           bg-transparent text-text-primary placeholder:text-text-secondary/50
+           focus:outline-none focus:ring-2 focus:ring-brand/50 focus:border-brand
+           transition-all duration-300 backdrop-blur-sm;
+  }
+
+  /* Primary button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-gradient-to-tr from-brand-hover to-brand
+           text-white text-sm font-medium px-4 py-2 rounded-lg
+           transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed
+           shadow-md shadow-brand/30 hover:shadow-glow hover:-translate-y-0.5;
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 text-sm text-text-secondary hover:text-text-primary
+           border border-canvas-border hover:border-text-secondary/30 px-4 py-2 rounded-lg
+           transition-all duration-300 bg-canvas-card backdrop-blur-sm hover:shadow-sm;
+  }
+
+  /* Danger button */
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 text-sm text-red-500 hover:text-red-400
+           border border-red-500/30 hover:border-red-500 hover:bg-red-500/10 px-3 py-2 rounded-lg
+           transition-all duration-300;
+  }
+
+  /* Table row */
+  .table-row-hover {
+    @apply hover:bg-black/5 dark:hover:bg-white/5 transition-colors duration-200 cursor-pointer;
+  }
+
+  /* Section heading */
+  .section-title {
+    @apply text-xs font-bold text-sidebar-text uppercase tracking-widest px-3 mb-2;
+  }
+
+  /* Status dot */
+  .status-dot {
+    @apply w-2 h-2 rounded-full flex-shrink-0 shadow-sm;
+  }
+
+  /* Metric tile */
+  .metric-tile {
+    @apply card px-5 py-4 flex flex-col gap-1;
+  }
+}

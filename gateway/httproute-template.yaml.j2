@@ -4,15 +4,15 @@ metadata:
   name: {{ deployment_id }}-route
   namespace: {{ namespace }}
   labels:
-    deployhub.io/project: "{{ project_name }}"
-    deployhub.io/deployment: "{{ deployment_id }}"
+    deployhub.jeneeldumasia.codes/project: "{{ project_name }}"
+    deployhub.jeneeldumasia.codes/deployment: "{{ deployment_id }}"
 spec:
   parentRefs:
     - name: deployhub-gateway
       namespace: deployhub-system
   hostnames:
-    # Host-based routing using wildcard domains (*.deployhub.io is handled by Gateway)
-    - "{{ project_name }}.deployhub.io"
+    # Host-based routing using wildcard domains (*.deployhub.jeneeldumasia.codes is handled by Gateway)
+    - "{{ project_name }}.deployhub.jeneeldumasia.codes"
   rules:
     - backendRefs:
         - name: {{ service_name }}

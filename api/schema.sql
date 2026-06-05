@@ -5,6 +5,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Projects Table
 CREATE TABLE IF NOT EXISTS projects (
     id VARCHAR(255) PRIMARY KEY,
+    owner_id VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
     namespace VARCHAR(255) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'Provisioning',
@@ -13,6 +14,7 @@ CREATE TABLE IF NOT EXISTS projects (
 );
 
 -- Pagination and query indexes
+CREATE INDEX IF NOT EXISTS idx_projects_owner_id ON projects(owner_id);
 CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
 CREATE INDEX IF NOT EXISTS idx_projects_created_at ON projects(created_at DESC);
 

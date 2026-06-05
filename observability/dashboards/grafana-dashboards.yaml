@@ -6,35 +6,50 @@ metadata:
   labels:
     grafana_dashboard: "1"
 data:
-  executive-dashboard.json: |-
+  platform-health.json: |-
     {
-      "title": "Executive Dashboard",
-      "panels": [
-        {"title": "Platform Availability (SLO)", "type": "stat", "targets": [{"expr": "job:platform_availability:1h"}]},
-        {"title": "Deployment Success Rate (SLO)", "type": "stat", "targets": [{"expr": "job:deployment_success_rate:1h"}]}
-      ]
-    }
-  operations-dashboard.json: |-
-    {
-      "title": "Operations Dashboard",
-      "panels": [
-        {"title": "Reconciliation Drift", "type": "timeseries", "targets": [{"expr": "rate(deployhub_drift_total[5m])"}]},
-        {"title": "PostgreSQL & Redis Health", "type": "stat", "targets": [{"expr": "pg_up"}, {"expr": "up{job=\"redis\"}"}]}
-      ]
-    }
-  builder-dashboard.json: |-
-    {
-      "title": "Builder Dashboard",
+      "title": "Platform Health",
       "panels": [
         {"title": "Queue Depth", "type": "timeseries", "targets": [{"expr": "deployhub_queue_depth"}]},
-        {"title": "Build Duration (95th)", "type": "stat", "targets": [{"expr": "job:build_duration_seconds:p95:1h"}]}
+        {"title": "DLQ Depth", "type": "timeseries", "targets": [{"expr": "deployhub_dlq_depth"}]},
+        {"title": "Retry Rate (5m)", "type": "timeseries", "targets": [{"expr": "rate(deployhub_retry_total[5m])"}]},
+        {"title": "Reconciliation Duration", "type": "timeseries", "targets": [{"expr": "deployhub_reconciliation_duration_seconds"}]},
+        {"title": "Drift Events (5m)", "type": "timeseries", "targets": [{"expr": "rate(deployhub_drift_total[5m])"}]}
       ]
     }
-  platform-dashboard.json: |-
+  build-performance.json: |-
     {
-      "title": "Platform Dashboard",
+      "title": "Build Performance",
       "panels": [
-        {"title": "Active Tenants", "type": "stat", "targets": [{"expr": "count(kube_namespace_labels{label_deployhub_io_tenant=\"true\"})"}]},
-        {"title": "DLQ Depth", "type": "timeseries", "targets": [{"expr": "deployhub_dlq_depth"}]}
+        {"title": "Build Duration p95", "type": "stat", "targets": [{"expr": "job:build_duration_seconds:p95:1h"}]},
+        {"title": "Build Duration p50", "type": "stat", "targets": [{"expr": "histogram_quantile(0.50, sum by(le) (rate(deployhub_build_duration_seconds_bucket[1h])))"}]},
+        {"title": "Build Success Rate", "type": "timeseries", "targets": [{"expr": "rate(deployhub_deployment_success_total[1h])"}]},
+        {"title": "Build Failure Rate", "type": "timeseries", "targets": [{"expr": "rate(deployhub_deployment_failure_total[1h])"}]},
+        {"title": "Active Builder Pods", "type": "stat", "targets": [{"expr": "kube_deployment_status_replicas_ready{deployment=\"deployhub-builder\"}"}]}
+      ]
+    }
+  project-resources.json: |-
+    {
+      "title": "Per-Project Resource Usage",
+      "panels": [
+        {"title": "CPU Usage by Namespace", "type": "timeseries", "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"tenant-.*\"}[5m])) by (namespace)"}]},
+        {"title": "Memory by Namespace", "type": "timeseries", "targets": [{"expr": "sum(container_memory_working_set_bytes{namespace=~\"tenant-.*\"}) by (namespace)"}]},
+        {"title": "Quota Saturation", "type": "timeseries", "targets": [{"expr": "kube_resourcequota{type=\"used\", namespace=~\"tenant-.*\"} / kube_resourcequota{type=\"hard\", namespace=~\"tenant-.*\"}"}]}
+      ]
+    }
+  pod-health.json: |-
+    {
+      "title": "Per-Deployment Pod Health",
+      "templating": {
+        "list": [
+          {"name": "namespace", "type": "query", "query": "label_values(kube_pod_info, namespace)"},
+          {"name": "deployment", "type": "query", "query": "label_values(kube_pod_info{namespace=\"$namespace\"}, created_by_name)"}
+        ]
+      },
+      "panels": [
+        {"title": "Pod Ready Status", "type": "stat", "targets": [{"expr": "kube_pod_status_ready{namespace=\"$namespace\", pod=~\"$deployment-.*\"}"}]},
+        {"title": "Restart Count", "type": "timeseries", "targets": [{"expr": "kube_pod_container_status_restarts_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}"}]},
+        {"title": "CPU Usage", "type": "timeseries", "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}[5m])) by (pod)"}]},
+        {"title": "Memory Usage", "type": "timeseries", "targets": [{"expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$deployment-.*\"}) by (pod)"}]}
       ]
     }

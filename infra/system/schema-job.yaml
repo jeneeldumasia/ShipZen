@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: deployhub-schema-bootstrap
+  namespace: deployhub-system
+  annotations:
+    # ArgoCD: run this Job on every sync but treat it as a hook, not a
+    # persistent resource. PostSync ensures it runs after the namespace
+    # and PostgreSQL are ready.
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  # Retry up to 3 times if psql exits non-zero (e.g. postgres not ready yet)
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: schema-apply
+          image: postgres:15-alpine
+          command:
+            - sh
+            - -c
+            - |
+              echo "Applying schema to $DATABASE_URL..."
+              psql "$DATABASE_URL" -f /schema/schema.sql
+              echo "Schema applied successfully."
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deployhub-db-credentials
+                  key: url
+          volumeMounts:
+            - name: schema
+              mountPath: /schema
+              readOnly: true
+      volumes:
+        - name: schema
+          configMap:
+            name: deployhub-schema

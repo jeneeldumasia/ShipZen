@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt-prod
+  labels:
+    deployhub.jeneeldumasia.codes/system: "true"
+spec:
+  acme:
+    email: admin@jeneeldumasia.codes
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-prod-account-key
+    solvers:
+    - dns01:
+        route53:
+          region: us-east-1

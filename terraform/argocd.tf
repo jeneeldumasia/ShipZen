@@ -37,7 +37,25 @@ resource "helm_release" "argocd" {
           syncPolicy:
             automated:
               prune: true
-              selfHeal: true
+              # Fix #5.8: selfHeal: true caused ArgoCD to fight KEDA.
+              # KEDA scales the builder Deployment away from replicas: 0 when
+              # there are pending builds. With selfHeal enabled, ArgoCD detects
+              # the replica count drift and immediately resets it back to 0,
+              # preventing builders from ever running.
+              # selfHeal is disabled; KEDA is the authoritative scaler for the
+              # builder Deployment. All other resources remain pruned/synced.
+              selfHeal: false
+            syncOptions:
+              # Prevent ArgoCD from managing the builder Deployment replica count.
+              # The ScaledObject owns this field.
+              - RespectIgnoreDifferences=true
+          ignoreDifferences:
+            - group: apps
+              kind: Deployment
+              name: deployhub-builder
+              namespace: deployhub-build
+              jsonPointers:
+                - /spec/replicas
     EOT
   ]
 

@@ -21,6 +21,14 @@ spec:
           type: RuntimeDefault
         runAsNonRoot: true
         runAsUser: 1000
+      # Toleration to schedule on the dedicated builder NodePool.
+      # Builder nodes are tainted deployhub.jeneeldumasia.codes/dedicated=builder:NoSchedule
+      # so only pods with this toleration land there.
+      tolerations:
+        - key: deployhub.jeneeldumasia.codes/dedicated
+          operator: Equal
+          value: builder
+          effect: NoSchedule
       containers:
         - name: builder
           image: deployhub-builder:latest
@@ -42,5 +50,20 @@ spec:
           env:
             - name: REDIS_HOST
               value: "redis-master.deployhub-system.svc.cluster.local"
-            - name: BUILDER_QUEUE
+            # Fix #7: key name matches config.BUILDER_QUEUE_NAME
+            - name: BUILDER_QUEUE_NAME
               value: "builder_queue"
+            # Fix #16: DATABASE_URL and S3_LOG_BUCKET were missing — builder
+            # was falling back to localhost postgres and a wrong bucket name.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deployhub-db-credentials
+                  key: url
+            - name: S3_LOG_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: deployhub-s3-config
+                  key: bucket_name
+            - name: CONSUMER_GROUP
+              value: "builder_group"

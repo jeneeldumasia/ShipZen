@@ -23,11 +23,228 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+
       - name: Terraform Init
         working-directory: ./terraform
         run: terraform init
 
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --region us-east-1 --name deployhub-cluster
+
+      # Step 1: Suspend ArgoCD auto-sync FIRST.
+      # If we skip this, ArgoCD's selfHeal will re-create every resource
+      # we delete in the next steps, causing a race condition.
+      - name: Suspend ArgoCD Auto-Sync
+        run: |
+          kubectl patch application deployhub-platform \
+            -n argocd \
+            --type merge \
+            -p '{"spec":{"syncPolicy":{"automated":null}}}' \
+          || echo "ArgoCD application not found, continuing..."
+
+      # Step 2: Delete Karpenter NodePools and EC2NodeClass so Karpenter
+      # stops provisioning new nodes and begins draining its own nodes.
+      # These nodes are NOT managed by Terraform, so we must remove them
+      # explicitly — they hold ENIs that block VPC deletion.
+      - name: Delete Karpenter NodePools and NodeClasses
+        run: |
+          kubectl delete nodepool --all --ignore-not-found=true || true
+          kubectl delete ec2nodeclass --all --ignore-not-found=true || true
+
+      # Step 3: Drain and delete any remaining Karpenter-provisioned nodes.
+      # We identify them by the karpenter.sh/nodepool label.
+      # This ensures their ENIs are released before Terraform runs.
+      - name: Drain Karpenter Nodes
+        run: |
+          KARPENTER_NODES=$(kubectl get nodes -l karpenter.sh/nodepool \
+            -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+
+          if [ -n "$KARPENTER_NODES" ]; then
+            for NODE in $KARPENTER_NODES; do
+              echo "Draining node: $NODE"
+              kubectl drain "$NODE" \
+                --ignore-daemonsets \
+                --delete-emptydir-data \
+                --force \
+                --timeout=120s || true
+            done
+            kubectl delete node $KARPENTER_NODES --ignore-not-found=true || true
+          else
+            echo "No Karpenter nodes found."
+          fi
+
+      # Step 4: Delete HTTPRoutes and Services of type LoadBalancer FIRST,
+      # then wait for AWS to fully deprovision the NLB/ELB.
+      # This is the #1 cause of VPC deletion failures — dangling ENIs from
+      # load balancers that Terraform doesn't manage directly.
+      - name: Delete LoadBalancer Services and HTTPRoutes
+        run: |
+          # Delete gateway HTTPRoutes (tenant workload routes)
+          kubectl delete httproute --all --all-namespaces --ignore-not-found=true || true
+
+          # Delete only LoadBalancer-type services (these provision AWS NLBs)
+          # We do NOT delete all services — ClusterIP services are fine to leave for Terraform
+          kubectl get svc --all-namespaces -o json | \
+            jq -r '.items[] | select(.spec.type == "LoadBalancer") | "\(.metadata.namespace) \(.metadata.name)"' | \
+            while read NS NAME; do
+              echo "Deleting LoadBalancer service $NS/$NAME"
+              kubectl delete svc "$NAME" -n "$NS" --ignore-not-found=true || true
+            done
+
+      # Step 5: Wait for all AWS Load Balancers to fully deprovision.
+      # AWS takes 60-90 seconds to delete NLB/ELB instances and release ENIs.
+      # Without this wait, Terraform fails with dependency violations on the VPC.
+      - name: Wait for Load Balancers to Deprovision
+        run: |
+          echo "Waiting for AWS Load Balancers to fully deprovision..."
+          MAX_WAIT=180
+          ELAPSED=0
+          CLUSTER_TAG="kubernetes.io/cluster/deployhub-cluster"
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            LB_COUNT=$(aws elbv2 describe-load-balancers \
+              --query "LoadBalancers[?contains(LoadBalancerName, 'deployhub') || Tags[?Key=='$CLUSTER_TAG']].LoadBalancerArn" \
+              --output text 2>/dev/null | wc -w || echo "0")
+
+            # Also check classic ELBs
+            CLB_COUNT=$(aws elb describe-load-balancers \
+              --query "LoadBalancerDescriptions[].LoadBalancerName" \
+              --output text 2>/dev/null | wc -w || echo "0")
+
+            TOTAL=$((LB_COUNT + CLB_COUNT))
+            echo "Load balancers still active: $TOTAL (${ELAPSED}s elapsed)"
+
+            if [ "$TOTAL" -eq 0 ]; then
+              echo "All load balancers deprovisioned."
+              break
+            fi
+
+            sleep 15
+            ELAPSED=$((ELAPSED + 15))
+          done
+
+          if [ $ELAPSED -ge $MAX_WAIT ]; then
+            echo "WARNING: Load balancers may still be active after ${MAX_WAIT}s. Proceeding anyway."
+          fi
+
+      # Step 6: Delete app namespaces only (NOT kube-system, kube-public, etc.)
+      # Deleting system namespaces causes the EKS control plane to report errors
+      # and can cause Terraform to hang waiting for node groups.
+      - name: Delete Application Namespaces
+        run: |
+          APP_NAMESPACES="argocd deployhub-system deployhub-build observability"
+          
+          # Also delete any tenant namespaces created by the controller
+          TENANT_NAMESPACES=$(kubectl get namespaces \
+            -l deployhub.io/tenant=true \
+            -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+
+          ALL_NS="$APP_NAMESPACES $TENANT_NAMESPACES"
+
+          for NS in $ALL_NS; do
+            echo "Deleting namespace: $NS"
+            kubectl delete namespace "$NS" --ignore-not-found=true || true
+          done
+
+      # Step 7: Wait for namespace termination. Namespaces with finalizers
+      # (e.g. from ArgoCD or cert-manager) can hang in Terminating state
+      # and hold resources that block Terraform.
+      - name: Wait for Namespace Termination
+        run: |
+          APP_NAMESPACES="argocd deployhub-system deployhub-build observability"
+          MAX_WAIT=120
+          ELAPSED=0
+
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            TERMINATING=$(kubectl get namespaces \
+              --field-selector status.phase=Terminating \
+              -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
+
+            if [ -z "$TERMINATING" ]; then
+              echo "All namespaces terminated."
+              break
+            fi
+
+            echo "Still terminating: $TERMINATING (${ELAPSED}s elapsed)"
+
+            # Force-remove finalizers from stuck namespaces
+            for NS in $TERMINATING; do
+              echo "Force-removing finalizers from namespace: $NS"
+              kubectl get namespace "$NS" -o json 2>/dev/null | \
+                jq '.spec.finalizers = []' | \
+                kubectl replace --raw "/api/v1/namespaces/$NS/finalize" -f - || true
+            done
+
+            sleep 10
+            ELAPSED=$((ELAPSED + 10))
+          done
+
+      # Step 8: Release any orphaned AWS Security Groups created by the
+      # AWS Load Balancer Controller that Terraform doesn't track.
+      - name: Release Orphaned Security Groups
+        run: |
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=deployhub-vpc" \
+            --query "Vpcs[0].VpcId" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$VPC_ID" ] || [ "$VPC_ID" = "None" ]; then
+            echo "VPC not found, skipping security group cleanup."
+          else
+            echo "Found VPC: $VPC_ID"
+            # Find and delete SGs tagged by the load balancer controller
+            SG_IDS=$(aws ec2 describe-security-groups \
+              --filters \
+                "Name=vpc-id,Values=$VPC_ID" \
+                "Name=tag-key,Values=kubernetes.io/cluster/deployhub-cluster" \
+              --query "SecurityGroups[?GroupName!='default'].GroupId" \
+              --output text 2>/dev/null || echo "")
+
+            if [ -n "$SG_IDS" ]; then
+              for SG in $SG_IDS; do
+                echo "Deleting security group: $SG"
+                aws ec2 delete-security-group --group-id "$SG" 2>/dev/null || \
+                  echo "Could not delete $SG (may still have dependencies, Terraform will retry)"
+              done
+            else
+              echo "No orphaned security groups found."
+            fi
+          fi
+
+      # Step 9: Full Terraform destroy. By this point:
+      # - Karpenter nodes are gone (ENIs released)
+      # - Load balancers are gone (ENIs and SGs released)
+      # - App namespaces are terminated
+      # - ArgoCD is not fighting us
+      # Terraform should be able to cleanly destroy EKS, the VPC, and S3.
       - name: Terraform Destroy
         working-directory: ./terraform
-        # Destroys EKS, VPC, S3, and ArgoCD to bring costs down to zero
         run: terraform destroy -auto-approve
+
+      # Step 10: Final sanity check — confirm the VPC is gone.
+      # If it still exists, print a warning with what's blocking it.
+      - name: Verify Cleanup
+        if: always()
+        run: |
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=deployhub-vpc" \
+            --query "Vpcs[0].VpcId" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -z "$VPC_ID" ] || [ "$VPC_ID" = "None" ]; then
+            echo "✅ VPC fully deleted. All infrastructure is down."
+          else
+            echo "⚠️  VPC $VPC_ID still exists. Listing remaining dependencies:"
+            echo "--- Network Interfaces ---"
+            aws ec2 describe-network-interfaces \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "NetworkInterfaces[*].{ID:NetworkInterfaceId,Desc:Description,Status:Status}" \
+              --output table || true
+            echo "--- Security Groups ---"
+            aws ec2 describe-security-groups \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "SecurityGroups[?GroupName!='default'].{ID:GroupId,Name:GroupName}" \
+              --output table || true
+          fi

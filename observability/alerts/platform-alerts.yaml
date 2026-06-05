@@ -69,7 +69,10 @@ spec:
 
         # Reconciliation Failures
         - alert: ReconciliationDriftHigh
-          expr: rate(deployhub_drift_total[5m]) > 0
+          # Fix #14/#6.2: deployhub_drift_total is now a Counter (was Gauge).
+          # rate() is correct for a Counter. The old Gauge + rate() combination
+          # always returned 0 making this alert permanently silent.
+          expr: rate(deployhub_drift_total_total[5m]) > 0
           for: 5m
           labels:
             severity: warning

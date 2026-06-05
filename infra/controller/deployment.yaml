@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployhub-controller
+  namespace: deployhub-system
+  labels:
+    app: deployhub-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: deployhub-controller
+  template:
+    metadata:
+      labels:
+        app: deployhub-controller
+    spec:
+      serviceAccountName: deployhub-controller-sa
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: controller
+          image: deployhub-controller:latest
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: deployhub-db-credentials
+                  key: url
+            - name: RECONCILIATION_INTERVAL
+              value: "60"
+            - name: ECR_REGISTRY
+              valueFrom:
+                secretKeyRef:
+                  name: deployhub-ecr-config
+                  key: registry_hostname
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9090
+            initialDelaySeconds: 10
+            periodSeconds: 10

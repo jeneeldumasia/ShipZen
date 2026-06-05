@@ -7,26 +7,38 @@ spec:
   groups:
     - name: deployhub-slos
       rules:
-        # SLO: Deployment Success Rate > 99%
-        # Recording rule aggregated by deployment_id
-        - record: job:deployment_success_rate:1h
-          expr: |
-            sum(rate(deployhub_deployment_success_total[1h])) 
-            / 
-            (sum(rate(deployhub_deployment_success_total[1h])) + sum(rate(deployhub_deployment_failure_total[1h])))
-            
         # SLO: Platform Availability > 99.9%
-        # Aggregated Gateway success vs 5xx errors
+        # Based on Envoy Gateway HTTP success rate
         - record: job:platform_availability:1h
           expr: |
-            sum(rate(envoy_http_requests_total{response_code_class="2xx"}[1h])) 
-            / 
+            sum(rate(envoy_http_requests_total{response_code_class="2xx"}[1h]))
+            /
             sum(rate(envoy_http_requests_total[1h]))
 
-        # SLO: Build Duration < 5 minutes (95th percentile)
-        - record: job:build_duration_seconds:p95:1h
-          expr: histogram_quantile(0.95, sum by(le) (rate(deployhub_build_duration_seconds_bucket[1h])))
-
         # SLO: Queue Latency < 10 seconds (95th percentile)
+        # Uses deployhub_queue_latency_seconds which IS instrumented in worker/metrics.py
         - record: job:queue_latency_seconds:p95:5m
           expr: histogram_quantile(0.95, sum by(le) (rate(deployhub_queue_latency_seconds_bucket[5m])))
+
+        # SLO: Deployment retry rate < 5%
+        # Uses deployhub_retry_total (Counter) and deployhub_queue_depth (Gauge)
+        # Both ARE instrumented in worker/metrics.py
+        - record: job:deployment_retry_rate:5m
+          expr: rate(deployhub_retry_total_total[5m])
+
+        # SLO: DLQ depth = 0 (no deployments should permanently fail)
+        # Uses deployhub_dlq_depth which IS instrumented in worker/metrics.py
+        - record: job:dlq_depth:current
+          expr: deployhub_dlq_depth
+
+        # SLO: Deployment Success (derived metric)
+        - record: job:deployment_success_total
+          expr: deployhub_deployment_success_total
+
+        # SLO: Deployment Failure (derived metric)
+        - record: job:deployment_failure_total
+          expr: deployhub_deployment_failure_total
+
+        # SLO: Build Duration (95th percentile)
+        - record: job:build_duration_seconds:p95:1h
+          expr: histogram_quantile(0.95, sum by(le) (rate(deployhub_build_duration_seconds_bucket[1h])))
