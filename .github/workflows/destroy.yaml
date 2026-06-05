@@ -136,6 +136,11 @@ jobs:
         run: |
           APP_NAMESPACES="argocd deployhub-system deployhub-build observability"
           
+          # Delete ArgoCD applications and patch finalizers first so it doesn't block namespace deletion
+          echo "Cleaning up ArgoCD applications..."
+          kubectl patch application deployhub-platform -n argocd --type json -p='[{"op": "remove", "path": "/metadata/finalizers"}]' || true
+          kubectl delete application --all -n argocd --ignore-not-found=true || true
+
           # Also delete any tenant namespaces created by the controller
           TENANT_NAMESPACES=$(kubectl get namespaces \
             -l deployhub.io/tenant=true \
