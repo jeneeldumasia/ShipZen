@@ -14,6 +14,20 @@ locals {
   pg_port     = 5432
 }
 
+resource "kubernetes_storage_class" "gp3" {
+  metadata {
+    name = "gp3"
+    annotations = {
+      "storageclass.kubernetes.io/is-default-class" = "true"
+    }
+  }
+  storage_provisioner = "ebs.csi.aws.com"
+  volume_binding_mode = "WaitForFirstConsumer"
+  parameters = {
+    type = "gp3"
+  }
+}
+
 resource "helm_release" "postgresql" {
   name             = "postgres"
   repository       = "https://charts.bitnami.com/bitnami"
@@ -59,7 +73,7 @@ resource "helm_release" "postgresql" {
     value = "0"
   }
 
-  depends_on = [helm_release.keda]
+  depends_on = [helm_release.keda, kubernetes_storage_class.gp3]
 }
 
 # Write a Kubernetes Secret containing the full DATABASE_URL connection string.

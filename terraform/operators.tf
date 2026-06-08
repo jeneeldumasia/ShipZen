@@ -26,6 +26,21 @@ resource "helm_release" "external_secrets" {
     value = "true"
   }
 
+  set {
+    name  = "serviceAccount.create"
+    value = "true"
+  }
+
+  set {
+    name  = "serviceAccount.name"
+    value = "external-secrets-sa"
+  }
+
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = "arn:aws:iam::$${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
+  }
+
   depends_on = [module.eks, helm_release.cert_manager]
 }
 
@@ -132,16 +147,7 @@ resource "time_sleep" "wait_for_eso_crds" {
   create_duration = "15s"
 }
 
-resource "kubernetes_service_account" "eso_service_account" {
-  metadata {
-    name      = "external-secrets-sa"
-    namespace = "external-secrets"
-    annotations = {
-      "eks.amazonaws.com/role-arn" = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
-    }
-  }
-  depends_on = [helm_release.external_secrets]
-}
+
 
 resource "null_resource" "cluster_secret_store" {
   triggers = {
@@ -168,7 +174,7 @@ spec:
 EOF
 EOT
   }
-  depends_on = [kubernetes_service_account.eso_service_account, time_sleep.wait_for_eso_crds]
+  depends_on = [time_sleep.wait_for_eso_crds]
 }
 
 # ── Cert Manager ─────────────────────────────────────────────────────────────
