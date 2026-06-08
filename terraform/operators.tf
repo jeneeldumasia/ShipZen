@@ -10,7 +10,7 @@ resource "helm_release" "keda" {
   namespace        = "keda"
   create_namespace = true
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }
 
 # ── External Secrets Operator ────────────────────────────────────────────────
@@ -21,7 +21,12 @@ resource "helm_release" "external_secrets" {
   namespace        = "external-secrets"
   create_namespace = true
 
-  depends_on = [module.eks]
+  set {
+    name  = "installCRDs"
+    value = "true"
+  }
+
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }
 
 # ── AWS Load Balancer Controller ─────────────────────────────────────────────
@@ -89,7 +94,6 @@ resource "helm_release" "aws_load_balancer_controller" {
   name       = "aws-load-balancer-controller"
   repository = "https://aws.github.io/eks-charts"
   chart      = "aws-load-balancer-controller"
-  version    = "1.8.1"
   namespace  = "kube-system"
 
   set {
@@ -171,7 +175,7 @@ resource "helm_release" "cert_manager" {
     value = "true"
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }
 
 # ── Karpenter ────────────────────────────────────────────────────────────────
@@ -197,5 +201,5 @@ resource "helm_release" "karpenter" {
     value = module.karpenter.iam_role_arn
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }

@@ -18,6 +18,7 @@ resource "helm_release" "postgresql" {
   name             = "postgres"
   repository       = "https://charts.bitnami.com/bitnami"
   chart            = "postgresql"
+  version          = "15.5.23"
   namespace        = "deployhub-system"
   create_namespace = true
 
@@ -58,7 +59,7 @@ resource "helm_release" "postgresql" {
     value = "0"
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }
 
 # Write a Kubernetes Secret containing the full DATABASE_URL connection string.

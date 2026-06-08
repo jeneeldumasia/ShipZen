@@ -8,6 +8,7 @@ resource "helm_release" "redis" {
   name             = "redis"
   repository       = "https://charts.bitnami.com/bitnami"
   chart            = "redis"
+  version          = "19.6.4"
   namespace        = "deployhub-system"
   create_namespace = true
 
@@ -36,5 +37,5 @@ resource "helm_release" "redis" {
     value = "redis-master"
   }
 
-  depends_on = [module.eks]
+  depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }
