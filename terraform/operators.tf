@@ -38,7 +38,7 @@ resource "helm_release" "external_secrets" {
 
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = "arn:aws:iam::$${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
+    value = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
   }
 
   depends_on = [module.eks, helm_release.cert_manager]
@@ -151,7 +151,7 @@ resource "time_sleep" "wait_for_eso_crds" {
 
 resource "null_resource" "cluster_secret_store" {
   triggers = {
-    always_run = "$${timestamp()}"
+    always_run = "${timestamp()}"
   }
   provisioner "local-exec" {
     command = <<EOT
