@@ -85,7 +85,7 @@ module "eks" {
       min_size       = 1
       max_size       = 3
       desired_size   = 2
-      instance_types = ["c7i.large"]
+      instance_types = ["m7i-flex.large"]
       ami_type       = "AL2023_x86_64_STANDARD"
 
       labels = {
