@@ -86,7 +86,7 @@ module "eks" {
       max_size       = 3
       desired_size   = 2
       instance_types = ["m7i-flex.large"]
-      ami_type       = "AL2_x86_64"
+      ami_type       = "AL2023_x86_64_STANDARD"
 
       labels = {
         "deployhub.jeneeldumasia.codes/node-type" = "platform"
