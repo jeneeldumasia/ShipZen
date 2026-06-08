@@ -155,7 +155,7 @@ resource "null_resource" "cluster_secret_store" {
   }
   provisioner "local-exec" {
     command = <<EOT
-      aws eks update-kubeconfig --region $${var.aws_region} --name deployhub-cluster
+      aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster
       cat <<EOF | kubectl apply -f -
 apiVersion: external-secrets.io/v1beta1
 kind: ClusterSecretStore
@@ -165,7 +165,7 @@ spec:
   provider:
     aws:
       service: SecretsManager
-      region: "$${var.aws_region}"
+      region: "${var.aws_region}"
       auth:
         jwt:
           serviceAccountRef:

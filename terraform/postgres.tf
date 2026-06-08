@@ -26,6 +26,7 @@ resource "kubernetes_storage_class" "gp3" {
   parameters = {
     type = "gp3"
   }
+  depends_on = [module.eks]
 }
 
 resource "helm_release" "postgresql" {
@@ -71,6 +72,14 @@ resource "helm_release" "postgresql" {
   set {
     name  = "readReplicas.replicaCount"
     value = "0"
+  }
+
+  # REQUIRED ON EKS: The EBS CSI driver mounts the volume as root.
+  # The postgres user (1001) will get Permission Denied during initdb.
+  # This runs an initContainer to chown the volume back to 1001.
+  set {
+    name  = "volumePermissions.enabled"
+    value = "true"
   }
 
   depends_on = [helm_release.keda, kubernetes_storage_class.gp3]
