@@ -64,6 +64,11 @@ resource "helm_release" "postgresql" {
   }
 
   set {
+    name  = "primary.persistence.storageClass"
+    value = kubernetes_storage_class.gp3.metadata[0].name
+  }
+
+  set {
     name  = "primary.persistence.size"
     value = "10Gi"
   }

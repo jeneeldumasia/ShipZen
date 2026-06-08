@@ -144,7 +144,7 @@ resource "helm_release" "aws_load_balancer_controller" {
 
 resource "time_sleep" "wait_for_eso_crds" {
   depends_on      = [helm_release.external_secrets]
-  create_duration = "15s"
+  create_duration = "60s"
 }
 
 
