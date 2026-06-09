@@ -156,6 +156,17 @@ resource "null_resource" "cluster_secret_store" {
   provisioner "local-exec" {
     command = <<EOT
       aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster
+      
+      echo "Refreshing Kubernetes API discovery cache..."
+      kubectl api-resources > /dev/null || true
+      
+      echo "Waiting for ClusterSecretStore CRD to be registered..."
+      until kubectl get crd clustersecretstores.external-secrets.io >/dev/null 2>&1; do
+        echo "Waiting for CRD..."
+        sleep 5
+      done
+      kubectl wait --for condition=established --timeout=120s crd/clustersecretstores.external-secrets.io
+
       cat <<EOF | kubectl apply -f -
 apiVersion: external-secrets.io/v1beta1
 kind: ClusterSecretStore
