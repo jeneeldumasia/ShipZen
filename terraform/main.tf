@@ -200,19 +200,15 @@ resource "kubernetes_namespace" "deployhub_build" {
   }
 }
 
-resource "kubernetes_manifest" "builder_sa" {
-  manifest = {
-    apiVersion = "v1"
-    kind       = "ServiceAccount"
-    metadata   = {
-      name      = "deployhub-builder-sa"
-      namespace = kubernetes_namespace.deployhub_build.metadata[0].name
-      annotations = {
-        "eks.amazonaws.com/role-arn" = module.irsa_builder.iam_role_arn
-      }
+resource "kubernetes_service_account" "builder_sa" {
+  metadata {
+    name      = "deployhub-builder-sa"
+    namespace = kubernetes_namespace.deployhub_build.metadata[0].name
+    annotations = {
+      "eks.amazonaws.com/role-arn" = module.irsa_builder.iam_role_arn
     }
-    automountServiceAccountToken = false
   }
+  automount_service_account_token = false
 }
 
 # ── ECR Pull Token Secret ─────────────────────────────────────────────────────
