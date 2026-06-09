@@ -42,7 +42,8 @@ class StateMachine:
         else:
             # Cheap liveness check — raises if the connection is broken
             try:
-                self._conn.cursor().execute("SELECT 1")
+                with self._conn.cursor() as cur:
+                    cur.execute("SELECT 1")
             except psycopg2.Error:
                 logger.warning("DB connection stale, reconnecting...")
                 try:

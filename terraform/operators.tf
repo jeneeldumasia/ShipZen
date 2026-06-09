@@ -15,6 +15,33 @@ resource "helm_release" "keda" {
 }
 
 # ── External Secrets Operator ────────────────────────────────────────────────
+module "irsa_eso" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name = "DeployHubESO"
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["external-secrets:external-secrets-sa"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "eso_secrets_manager" {
+  name   = "DeployHubESOSecretsPolicy"
+  role   = module.irsa_eso.iam_role_name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue", "secretsmanager:DescribeSecret"]
+      Resource = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:secret:deployhub/*"
+    }]
+  })
+}
+
 resource "helm_release" "external_secrets" {
   name             = "external-secrets"
   repository       = "https://charts.external-secrets.io"
@@ -40,7 +67,7 @@ resource "helm_release" "external_secrets" {
 
   set {
     name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
+    value = module.irsa_eso.iam_role_arn
   }
 
   # ESO depends on cert-manager being ready (it uses webhook TLS certs)
@@ -144,7 +171,7 @@ resource "null_resource" "gateway_api_crds" {
     cluster_name = module.eks.cluster_name
   }
   provisioner "local-exec" {
-    command = "aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster && kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml"
+    command = "aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster && kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
   }
   depends_on = [module.eks]
 }
@@ -234,7 +261,7 @@ resource "helm_release" "cert_manager" {
     value = "true"
   }
 
-  depends_on = [module.eks, helm_release.karpenter]
+  depends_on = [module.eks]
 }
 
 # ── Karpenter ────────────────────────────────────────────────────────────────
@@ -264,12 +291,3 @@ resource "helm_release" "karpenter" {
   depends_on = [module.eks, helm_release.aws_load_balancer_controller]
 }
 
-resource "null_resource" "karpenter_nodepool" {
-  triggers = {
-    always_run = "${timestamp()}"
-  }
-  provisioner "local-exec" {
-    command = "aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster && kubectl apply -f karpenter-nodepool.yaml"
-  }
-  depends_on = [helm_release.karpenter]
-}

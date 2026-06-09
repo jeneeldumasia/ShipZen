@@ -62,6 +62,7 @@ def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
     would crash-loop with 'relation "projects" does not exist'.
     """
     for attempt in range(1, max_attempts + 1):
+        conn = None
         try:
             conn = get_db_connection()
             with conn.cursor() as cur:
@@ -76,10 +77,11 @@ def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
         except Exception as e:
             logger.warning(f"Unexpected DB error (attempt {attempt}/{max_attempts}): {e}")
         finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
         time.sleep(delay)
     raise RuntimeError(f"Database schema not ready after {max_attempts * delay}s — aborting")
 
@@ -137,55 +139,56 @@ def reconcile():
                 try:
                     project = ProjectSchema(**project_data)
 
-                    if project.status == ProjectStatus.PROVISIONING:
-                        logger.info(f"Provisioning project: {project.name} ({project.namespace})")
-                        template = jinja_env.get_template("tenant.yaml.j2")
-                        manifests = template.render(
-                            namespace=project.namespace,
-                            project_id=project.id,
-                            ecr_registry=ECR_REGISTRY,
-                        )
-                        # Fix #1: actually applies manifests now.
-                        apply_manifests(manifests)
-
-                        # Fix #12: only mark READY after verifying the namespace
-                        # was actually created. This breaks the race where the DB
-                        # is marked READY before K8s has processed the request.
-                        if check_namespace_exists(project.namespace):
-                            cur.execute(
-                                "UPDATE projects SET status = %s WHERE id = %s;",
-                                (ProjectStatus.READY.value, project.id)
+                    with conn.cursor(cursor_factory=DictCursor) as project_cur:
+                        if project.status == ProjectStatus.PROVISIONING:
+                            logger.info(f"Provisioning project: {project.name} ({project.namespace})")
+                            template = jinja_env.get_template("tenant.yaml.j2")
+                            manifests = template.render(
+                                namespace=project.namespace,
+                                project_id=project.id,
+                                ecr_registry=ECR_REGISTRY,
                             )
-                            conn.commit()
-                            logger.info(f"Project {project.name} provisioned and Ready.")
-                        else:
-                            # Namespace not visible yet; leave as PROVISIONING
-                            # and retry on the next reconcile tick.
-                            conn.rollback()
-                            logger.info(f"Namespace {project.namespace} not yet visible; will retry.")
-
-                    elif project.status == ProjectStatus.TERMINATING:
-                        logger.info(f"Terminating project: {project.name} ({project.namespace})")
-                        if check_namespace_exists(project.namespace):
-                            delete_namespace(project.namespace)
-                            logger.info(f"Namespace {project.namespace} deletion triggered.")
-                            conn.commit()
-                        else:
-                            cur.execute("DELETE FROM projects WHERE id = %s;", (project.id,))
-                            conn.commit()
-                            logger.info(f"Project {project.name} permanently cleaned up.")
-
-                    elif project.status == ProjectStatus.READY:
-                        if not check_namespace_exists(project.namespace):
-                            deployhub_drift_total.inc()
-                            logger.warning(f"Drift detected! Namespace {project.namespace} missing for Ready project.")
-                            cur.execute(
-                                "UPDATE projects SET status = %s WHERE id = %s;",
-                                (ProjectStatus.PROVISIONING.value, project.id)
-                            )
-                            conn.commit()
-                        else:
-                            reconcile_deployments(conn, cur, project)
+                            # Fix #1: actually applies manifests now.
+                            apply_manifests(manifests)
+    
+                            # Fix #12: only mark READY after verifying the namespace
+                            # was actually created. This breaks the race where the DB
+                            # is marked READY before K8s has processed the request.
+                            if check_namespace_exists(project.namespace):
+                                project_cur.execute(
+                                    "UPDATE projects SET status = %s WHERE id = %s;",
+                                    (ProjectStatus.READY.value, project.id)
+                                )
+                                conn.commit()
+                                logger.info(f"Project {project.name} provisioned and Ready.")
+                            else:
+                                # Namespace not visible yet; leave as PROVISIONING
+                                # and retry on the next reconcile tick.
+                                conn.rollback()
+                                logger.info(f"Namespace {project.namespace} not yet visible; will retry.")
+    
+                        elif project.status == ProjectStatus.TERMINATING:
+                            logger.info(f"Terminating project: {project.name} ({project.namespace})")
+                            if check_namespace_exists(project.namespace):
+                                delete_namespace(project.namespace)
+                                logger.info(f"Namespace {project.namespace} deletion triggered.")
+                                conn.commit()
+                            else:
+                                project_cur.execute("DELETE FROM projects WHERE id = %s;", (project.id,))
+                                conn.commit()
+                                logger.info(f"Project {project.name} permanently cleaned up.")
+    
+                        elif project.status == ProjectStatus.READY:
+                            if not check_namespace_exists(project.namespace):
+                                deployhub_drift_total.inc()
+                                logger.warning(f"Drift detected! Namespace {project.namespace} missing for Ready project.")
+                                project_cur.execute(
+                                    "UPDATE projects SET status = %s WHERE id = %s;",
+                                    (ProjectStatus.PROVISIONING.value, project.id)
+                                )
+                                conn.commit()
+                            else:
+                                reconcile_deployments(conn, project_cur, project)
 
                 except Exception as e:
                     logger.error(f"Error reconciling project {row['id']}: {e}")

@@ -152,7 +152,7 @@ jobs:
 
           # Also delete any tenant namespaces created by the controller
           TENANT_NAMESPACES=$(kubectl get namespaces \
-            -l deployhub.io/tenant=true \
+            -l deployhub.jeneeldumasia.codes/tenant=true \
             -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
 
           ALL_NS="$APP_NAMESPACES $TENANT_NAMESPACES"

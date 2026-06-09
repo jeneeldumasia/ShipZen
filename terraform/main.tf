@@ -157,6 +157,76 @@ resource "aws_ecr_repository" "builds" {
   force_delete = true
 }
 
+# ── Builder Service Account and Namespace ──────────────────────────────────────
+module "irsa_builder" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name = "DeployHubBuilderRole"
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["deployhub-build:deployhub-builder-sa"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "builder_ecr" {
+  name = "DeployHubBuilderECRPolicy"
+  role = module.irsa_builder.iam_role_name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
+      { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability","ecr:PutImage",
+        "ecr:InitiateLayerUpload","ecr:UploadLayerPart","ecr:CompleteLayerUpload",
+        "ecr:DescribeImageScanFindings"], Resource = aws_ecr_repository.builds.arn }
+    ]
+  })
+}
+
+resource "kubernetes_namespace" "deployhub_build" {
+  metadata {
+    name = "deployhub-build"
+    labels = {
+      "pod-security.kubernetes.io/enforce"         = "restricted"
+      "pod-security.kubernetes.io/enforce-version" = "latest"
+      "pod-security.kubernetes.io/audit"           = "restricted"
+      "pod-security.kubernetes.io/audit-version"   = "latest"
+      "pod-security.kubernetes.io/warn"            = "restricted"
+      "pod-security.kubernetes.io/warn-version"    = "latest"
+    }
+  }
+}
+
+resource "kubernetes_manifest" "builder_sa" {
+  manifest = {
+    apiVersion = "v1"
+    kind       = "ServiceAccount"
+    metadata   = {
+      name      = "deployhub-builder-sa"
+      namespace = kubernetes_namespace.deployhub_build.metadata[0].name
+      annotations = {
+        "eks.amazonaws.com/role-arn" = module.irsa_builder.iam_role_arn
+      }
+    }
+    automountServiceAccountToken = false
+  }
+}
+
+# ── ECR Pull Token Secret ─────────────────────────────────────────────────────
+# Used by External Secrets Operator to inject ECR pull credentials into namespaces
+resource "aws_secretsmanager_secret" "ecr_pull_token" {
+  name                    = "deployhub/ecr-pull-token"
+  recovery_window_in_days = 0  # Immediate deletion on destroy
+}
+
+resource "aws_secretsmanager_secret_version" "ecr_pull_token" {
+  secret_id     = aws_secretsmanager_secret.ecr_pull_token.id
+  secret_string = "placeholder"  # Will be rotated by an external cronjob/lambda
+}
+
 # ── S3 Bucket for Build Logs ─────────────────────────────────────────────────
 resource "aws_s3_bucket" "build_logs" {
   bucket_prefix = "deployhub-build-logs-"

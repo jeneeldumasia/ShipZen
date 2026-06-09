@@ -43,6 +43,8 @@ spec:
               value: "redis-master.deployhub-system.svc.cluster.local"
             - name: STREAM_NAME
               value: "deploy_stream"
+            - name: UI_ORIGIN
+              value: "https://deployhub.jeneeldumasia.codes"
             - name: ECR_REPOSITORY_URL
               valueFrom:
                 secretKeyRef:
