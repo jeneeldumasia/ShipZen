@@ -131,12 +131,19 @@ jobs:
             echo "WARNING: Load balancers may still be active after ${MAX_WAIT}s. Proceeding anyway."
           fi
 
-      # Step 6: Delete app namespaces only (NOT kube-system, kube-public, etc.)
+      # Step 6: Delete Application Namespaces
       # Deleting system namespaces causes the EKS control plane to report errors
       # and can cause Terraform to hang waiting for node groups.
       - name: Delete Application Namespaces
         run: |
           APP_NAMESPACES="argocd deployhub-system deployhub-build observability"
+          
+          # CRITICAL: Delete all webhooks first! If Kyverno or AWS Load Balancer webhooks
+          # are left behind but their pods are deleted, the API server will deadlock
+          # and reject all further delete requests, causing terraform destroy to fail.
+          echo "Deleting all admission webhooks to prevent teardown deadlocks..."
+          kubectl delete validatingwebhookconfigurations --all --ignore-not-found=true || true
+          kubectl delete mutatingwebhookconfigurations --all --ignore-not-found=true || true
           
           # Delete ArgoCD applications and patch finalizers first so it doesn't block namespace deletion
           echo "Cleaning up ArgoCD applications..."
