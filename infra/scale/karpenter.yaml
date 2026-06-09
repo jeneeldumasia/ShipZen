@@ -1,10 +1,13 @@
-apiVersion: karpenter.k8s.aws/v1beta1
+# Upgraded from v1beta1 to v1 (stable) — required for Karpenter >= 1.0
+apiVersion: karpenter.k8s.aws/v1
 kind: EC2NodeClass
 metadata:
   name: deployhub-default
 spec:
-  amiFamily: AL2
-  role: "KarpenterNodeRole-DeployHub"
+  # v1 requires amiSelectorTerms instead of amiFamily
+  amiSelectorTerms:
+    - alias: al2023@latest
+  role: "DeployHubKarpenterNodeRole"
   subnetSelectorTerms:
     - tags:
         karpenter.sh/discovery: "DeployHub"
@@ -12,10 +15,8 @@ spec:
     - tags:
         karpenter.sh/discovery: "DeployHub"
 ---
-# Builder NodePool — for build jobs only.
-# Tainted so only builder pods (which carry the matching toleration) can schedule here.
-# Tenant and platform workloads cannot land on these nodes.
-apiVersion: karpenter.sh/v1beta1
+# Builder NodePool — dedicated to build jobs, tainted to prevent other workloads
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: builder-pool
@@ -25,7 +26,7 @@ spec:
       requirements:
         - key: kubernetes.io/arch
           operator: In
-          values: ["amd64", "arm64"]
+          values: ["amd64"]
         - key: karpenter.sh/capacity-type
           operator: In
           values: ["spot", "on-demand"]
@@ -33,6 +34,8 @@ spec:
           operator: In
           values: ["c", "m", "r"]
       nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
         name: deployhub-default
       taints:
         - key: deployhub.jeneeldumasia.codes/dedicated
@@ -42,12 +45,8 @@ spec:
     consolidationPolicy: WhenUnderutilized
     expireAfter: 720h
 ---
-# Tenant NodePool — for user application workloads.
-# Fix #5.4: added a taint so tenant pods cannot accidentally schedule on builder
-# nodes (which are sized for heavy CPU/memory builds, not app serving).
-# Tenant pods carry the matching toleration injected by the controller template.
-# Platform pods (controller, worker, API) go to the managed node group instead.
-apiVersion: karpenter.sh/v1beta1
+# Tenant NodePool — stable on-demand nodes for user application workloads
+apiVersion: karpenter.sh/v1
 kind: NodePool
 metadata:
   name: tenant-pool
@@ -57,7 +56,7 @@ spec:
       requirements:
         - key: kubernetes.io/arch
           operator: In
-          values: ["amd64", "arm64"]
+          values: ["amd64"]
         - key: karpenter.sh/capacity-type
           operator: In
           values: ["on-demand"]
@@ -65,6 +64,8 @@ spec:
           operator: In
           values: ["m", "t3"]
       nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
         name: deployhub-default
       taints:
         - key: deployhub.jeneeldumasia.codes/dedicated

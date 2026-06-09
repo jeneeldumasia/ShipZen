@@ -81,5 +81,5 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "ALL"
   }
 
-  depends_on = [module.eks, helm_release.kyverno]
+  depends_on = [module.eks]
 }

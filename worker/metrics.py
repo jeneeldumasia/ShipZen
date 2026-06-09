@@ -25,11 +25,9 @@ deployhub_queue_latency_seconds = Histogram(
 def start_metrics_server(port=8000):
     start_http_server(port)
 
-deployhub_deployment_success_total = Counter(
-    'deployhub_deployment_success_total',
-    'Total successful deployments reaching Running state'
-)
-
+# deployhub_deployment_success_total removed from worker — the controller is the
+# authoritative source for this metric (it observes the Running transition).
+# Having it in both registries creates duplicate timeseries in Prometheus.
 deployhub_deployment_failure_total = Counter(
     'deployhub_deployment_failure_total',
     'Total deployments that ended in Failed or DLQ state'

@@ -55,14 +55,14 @@ spec:
               memory: "256Mi"
           livenessProbe:
             httpGet:
-              path: /
+              path: /metrics
               port: 9090
             initialDelaySeconds: 15
             periodSeconds: 20
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /
+              path: /metrics
               port: 9090
             initialDelaySeconds: 10
             periodSeconds: 10

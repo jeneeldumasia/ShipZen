@@ -210,8 +210,10 @@ def run_build(deployment_id: str, repo_url: str, image_name: str):
             # ECR Image Scanning Gate
             try:
                 ecr = boto3.client('ecr')
-                repo_name = image_name.split('/')[1].split(':')[0]
-                image_tag = image_name.split(':')[1]
+                # Use rsplit to safely handle any number of slashes in the registry hostname
+                # e.g. "123456789012.dkr.ecr.us-east-1.amazonaws.com/deployhub-builds:abc123"
+                registry_and_repo, image_tag = image_name.rsplit(':', 1)
+                repo_name = registry_and_repo.split('/', 1)[1]  # strip the registry prefix
                 
                 scan_status = "IN_PROGRESS"
                 attempts = 0

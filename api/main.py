@@ -382,12 +382,21 @@ def get_deployment(request: Request, project_id: str, deployment_id: str, curren
     return _serialize(deployment)
 
 @app.websocket("/ws/projects/{project_id}/deployments/{deployment_id}/status")
-async def websocket_deployment_status(websocket: WebSocket, project_id: str, deployment_id: str):
+async def websocket_deployment_status(websocket: WebSocket, project_id: str, deployment_id: str, token: str = Query(None)):
+    if not token:
+        await websocket.close(code=1008)
+        return
+    from auth import get_current_user_from_token
+    try:
+        user = get_current_user_from_token(token)
+    except Exception:
+        await websocket.close(code=1008)
+        return
+    
     await websocket.accept()
     try:
         last_state = None
         while True:
-            # We skip auth here for simplicity, but in a real app we'd validate a token in query params.
             # Using asyncio.sleep to poll the DB every second.
             import asyncio
             try:
@@ -643,11 +652,9 @@ def delete_env_var(request: Request, project_id: str, key: str, current_user: Us
 
 # ── Webhooks ──────────────────────────────────────────────────────────────────
 
-import secrets
-
 @app.post("/webhooks/github/{project_id}", tags=["Webhooks"])
 @limiter.limit("60/minute")
-def github_webhook(request: Request, project_id: str, payload: dict):
+async def github_webhook(request: Request, project_id: str):
     # Verify signature
     signature_header = request.headers.get("x-hub-signature-256")
     if not signature_header:
@@ -668,8 +675,16 @@ def github_webhook(request: Request, project_id: str, payload: dict):
         raise HTTPException(status_code=500, detail="Database error")
         
     # Validation logic requires raw body
-    # We will skip strict HMAC validation for now since payload is already parsed to dict
-    # In production we would use request.body()
+    body_bytes = await request.body()
+    expected_mac = hmac.new(webhook_secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(f"sha256={expected_mac}", signature_header):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+        
+    import json
+    try:
+        payload = json.loads(body_bytes)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
     
     # Trigger deploy
     # Determine branch

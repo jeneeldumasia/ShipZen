@@ -32,7 +32,7 @@ spec:
       containers:
         - name: builder
           image: deployhub-builder:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

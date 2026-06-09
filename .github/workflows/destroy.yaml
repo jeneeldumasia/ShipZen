@@ -18,7 +18,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -33,7 +33,7 @@ jobs:
         run: terraform init
 
       - name: Configure kubectl
-        run: aws eks update-kubeconfig --region us-east-1 --name deployhub-cluster
+        run: aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name deployhub-cluster
 
       # Step 1: Suspend ArgoCD auto-sync FIRST.
       # If we skip this, ArgoCD's selfHeal will re-create every resource

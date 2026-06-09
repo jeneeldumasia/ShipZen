@@ -54,26 +54,34 @@ def get_db_connection():
     return conn
 
 
-def init_db():
-    # The canonical schema lives in api/schema.sql and is applied at cluster
-    # bootstrap. init_db() only ensures the projects table exists so the
-    # controller can start cleanly before the full schema migration runs.
-    conn = get_db_connection()
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS projects (
-                    id VARCHAR(255) PRIMARY KEY,
-                    name VARCHAR(255) NOT NULL,
-                    namespace VARCHAR(255) NOT NULL,
-                    status VARCHAR(50) NOT NULL DEFAULT 'Provisioning',
-                    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-                    deleted_at TIMESTAMP
-                );
-            """)
-        conn.commit()
-    finally:
-        conn.close()
+def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
+    """
+    Block until the schema bootstrap Job has run and the projects table exists.
+    On a fresh cluster the Job runs as an ArgoCD PostSync hook — this can take
+    30-60s after the controller pod starts. Without this guard the controller
+    would crash-loop with 'relation "projects" does not exist'.
+    """
+    for attempt in range(1, max_attempts + 1):
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM projects LIMIT 1;")
+            conn.close()
+            logger.info("Database schema is ready.")
+            return
+        except psycopg2.OperationalError as e:
+            logger.warning(f"DB not reachable yet (attempt {attempt}/{max_attempts}): {e}")
+        except psycopg2.errors.UndefinedTable:
+            logger.warning(f"Schema not ready yet (attempt {attempt}/{max_attempts}), waiting {delay}s...")
+        except Exception as e:
+            logger.warning(f"Unexpected DB error (attempt {attempt}/{max_attempts}): {e}")
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+        time.sleep(delay)
+    raise RuntimeError(f"Database schema not ready after {max_attempts * delay}s — aborting")
 
 
 def apply_manifests(manifest_str: str):
@@ -262,7 +270,7 @@ def reconcile_deployments(conn, cur, project):
 def main():
     # Fix #2: metrics on 9090, not 8080 (defined in metrics.py default)
     start_metrics_server(port=9090)
-    init_db()
+    _wait_for_schema()
     while True:
         reconcile()
         time.sleep(RECONCILIATION_INTERVAL)

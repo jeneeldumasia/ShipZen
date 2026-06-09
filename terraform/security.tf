@@ -6,31 +6,29 @@ resource "helm_release" "kyverno" {
   name             = "kyverno"
   repository       = "https://kyverno.github.io/kyverno/"
   chart            = "kyverno"
+  version          = "3.2.6"
   namespace        = "kyverno"
   create_namespace = true
 
-  # Ensure the CRDs are installed before policies
   set {
     name  = "installCRDs"
     value = "true"
   }
 
-  depends_on = [module.eks, helm_release.redis]
+  depends_on = [module.eks]
 }
 
-# Install default strict baseline policies (Pod Security Standards)
 resource "helm_release" "kyverno_policies" {
   name             = "kyverno-policies"
   repository       = "https://kyverno.github.io/kyverno/"
   chart            = "kyverno-policies"
+  version          = "3.2.6"
   namespace        = "kyverno"
   create_namespace = true
 
-  # Set policy validation failure action to "audit" initially to prevent 
-  # immediately breaking workloads during the DevSecOps transformation.
   set {
     name  = "validationFailureAction"
-    value = "Audit" # Change to "Enforce" for true Google-level blocking
+    value = "Audit"
   }
 
   depends_on = [helm_release.kyverno]

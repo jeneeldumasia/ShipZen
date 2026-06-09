@@ -110,7 +110,7 @@ roleRef:
 # tenant namespace as a kubernetes.io/dockerconfigjson secret.
 # The ECR token is refreshed every hour by ESO (ECR tokens expire in 12h).
 # All app pods in this namespace reference this secret via imagePullSecrets.
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: ecr-pull-secret

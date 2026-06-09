@@ -1,98 +1,131 @@
+"""
+Auth0 JWT authentication for the DeployHub API.
+
+Validates Bearer tokens from the Authorization header against Auth0's JWKS endpoint.
+Falls back to a permissive stub when AUTH0_DOMAIN is not set (local dev / CI).
+"""
+
 import os
-from typing import Optional
-from fastapi import Request, HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, jwk
-from jose.utils import base64url_decode
-import httpx
-from pydantic import BaseModel
 import logging
+from dataclasses import dataclass
+from typing import Optional
 
-logger = logging.getLogger("auth")
+import httpx
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from jose import jwt, JWTError
 
-AUTH0_DOMAIN = os.getenv("AUTH0_DOMAIN")
-AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE")
-ALGORITHMS = ["RS256"]
+logger = logging.getLogger(__name__)
 
-security = HTTPBearer()
+AUTH0_DOMAIN   = os.getenv("AUTH0_DOMAIN", "")
+AUTH0_AUDIENCE = os.getenv("AUTH0_AUDIENCE", "")
+ALGORITHM      = "RS256"
 
-class User(BaseModel):
-    user_id: str
-    is_admin: bool
+# FastAPI security scheme — extracts Bearer token from Authorization header
+_bearer = HTTPBearer(auto_error=False)
 
-# Cache JWKS
-_jwks_cache = None
+# Simple in-memory JWKS cache so we don't hit Auth0 on every request
+_jwks_cache: Optional[dict] = None
 
-def get_jwks():
+
+def _get_jwks() -> dict:
     global _jwks_cache
-    if _jwks_cache is None:
-        try:
-            jwks_url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
-            response = httpx.get(jwks_url)
-            response.raise_for_status()
-            _jwks_cache = response.json()
-        except Exception as e:
-            logger.error(f"Failed to fetch JWKS from Auth0: {e}")
-            raise HTTPException(status_code=500, detail="Failed to fetch JWKS")
-    return _jwks_cache
-
-def verify_token(token: str) -> dict:
-    if not AUTH0_DOMAIN or not AUTH0_AUDIENCE:
-        # If Auth0 is not configured, we should reject. But for dev, we might mock it.
-        # Let's enforce auth
-        logger.error("AUTH0_DOMAIN or AUTH0_AUDIENCE not set")
-        raise HTTPException(status_code=500, detail="Auth configuration missing")
-
+    if _jwks_cache is not None:
+        return _jwks_cache
+    url = f"https://{AUTH0_DOMAIN}/.well-known/jwks.json"
     try:
+        resp = httpx.get(url, timeout=5)
+        resp.raise_for_status()
+        _jwks_cache = resp.json()
+        return _jwks_cache
+    except Exception as e:
+        logger.error(f"Failed to fetch JWKS from {url}: {e}")
+        raise HTTPException(status_code=503, detail="Auth service unavailable")
+
+
+@dataclass
+class User:
+    user_id: str
+    is_admin: bool = False
+
+
+def get_current_user_from_token(token: str) -> User:
+    """Helper to validate a token string directly (useful for WebSockets)."""
+    return get_current_user(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
+
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> User:
+    """
+    FastAPI dependency — validates the JWT and returns the current user.
+
+    If AUTH0_DOMAIN is not configured (local dev), returns a stub admin user
+    so the API works without Auth0 set up.
+    """
+    # ── Local dev stub ────────────────────────────────────────────────────────
+    if not AUTH0_DOMAIN:
+        logger.warning("AUTH0_DOMAIN not set — using stub user for local dev")
+        return User(user_id="local-dev-user", is_admin=True)
+
+    # ── Require Bearer token ──────────────────────────────────────────────────
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header missing",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = credentials.credentials
+
+    # ── Decode and validate ───────────────────────────────────────────────────
+    try:
+        jwks = _get_jwks()
         unverified_header = jwt.get_unverified_header(token)
-    except jwt.JWTError:
-        raise HTTPException(status_code=401, detail="Invalid header. Use an RS256 signed JWT Access Token")
-    
-    if unverified_header["alg"] != "RS256":
-        raise HTTPException(status_code=401, detail="Invalid algorithm. Use an RS256 signed JWT Access Token")
-    
-    jwks = get_jwks()
-    rsa_key = {}
-    for key in jwks["keys"]:
-        if key["kid"] == unverified_header["kid"]:
-            rsa_key = {
-                "kty": key["kty"],
-                "kid": key["kid"],
-                "use": key["use"],
-                "n": key["n"],
-                "e": key["e"]
-            }
-            break
-            
-    if not rsa_key:
-        raise HTTPException(status_code=401, detail="Unable to find appropriate key")
-        
-    try:
+
+        # Find the matching key in JWKS
+        rsa_key = {}
+        for key in jwks.get("keys", []):
+            if key.get("kid") == unverified_header.get("kid"):
+                rsa_key = {
+                    "kty": key["kty"],
+                    "kid": key["kid"],
+                    "use": key["use"],
+                    "n":   key["n"],
+                    "e":   key["e"],
+                }
+                break
+
+        if not rsa_key:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token: no matching key found",
+            )
+
         payload = jwt.decode(
             token,
             rsa_key,
-            algorithms=ALGORITHMS,
+            algorithms=[ALGORITHM],
             audience=AUTH0_AUDIENCE,
-            issuer=f"https://{AUTH0_DOMAIN}/"
+            issuer=f"https://{AUTH0_DOMAIN}/",
         )
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token is expired")
-    except jwt.JWTClaimsError:
-        raise HTTPException(status_code=401, detail="Incorrect claims, please check the audience and issuer")
-    except Exception as e:
-        logger.error(f"Error validating token: {e}")
-        raise HTTPException(status_code=401, detail="Unable to parse authentication token.")
 
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> User:
-    token = credentials.credentials
-    payload = verify_token(token)
-    
-    # Extract roles to check if admin
-    roles = payload.get("https://deployhub.jeneeldumasia.codes/roles", [])
-    is_admin = "admin" in roles
-    
-    return User(
-        user_id=payload["sub"],
-        is_admin=is_admin
-    )
+        user_id: str = payload.get("sub", "")
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token missing sub claim",
+            )
+
+        # Check for admin role in custom claim
+        # Set this up in Auth0 Actions: event.user.app_metadata.roles
+        roles = payload.get("https://deployhub.jeneeldumasia.codes/roles", [])
+        is_admin = "admin" in roles
+
+        return User(user_id=user_id, is_admin=is_admin)
+
+    except JWTError as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {e}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

@@ -17,7 +17,7 @@ permissions:
 env:
   MAX_UPTIME_HOURS: 4
   CLUSTER_NAME: deployhub-cluster
-  AWS_REGION: us-east-1
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
 
 jobs:
   check-and-destroy:

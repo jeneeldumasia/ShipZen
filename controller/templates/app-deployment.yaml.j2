@@ -1,4 +1,4 @@
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: {{ deployment_name }}-secrets
@@ -61,7 +61,8 @@ spec:
             - secretRef:
                 name: {{ deployment_name }}-secrets-sync
           ports:
-            - containerPort: {{ port | default(8080) }}
+            - name: http
+              containerPort: {{ port | default(8080) }}
           readinessProbe:
             httpGet:
               path: "{{ health_check_path | default('/') }}"
@@ -97,7 +98,7 @@ spec:
     - name: deployhub-gateway
       namespace: deployhub-system
   hostnames:
-    - "{{ deployment_id[:8] }}.{{ project_name }}.deployhub.jeneeldumasia.codes"
+    - "{{ deployment_id[:8] }}--{{ project_name }}.deployhub.jeneeldumasia.codes"
   rules:
     - backendRefs:
         - name: {{ deployment_name }}-svc

@@ -12,3 +12,4 @@ resources:
   - api/
   - builder/
   - scale/
+  - secrets/

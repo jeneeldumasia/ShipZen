@@ -7,10 +7,11 @@ resource "helm_release" "keda" {
   name             = "keda"
   repository       = "https://kedacore.github.io/charts"
   chart            = "keda"
+  version          = "2.14.2"
   namespace        = "keda"
   create_namespace = true
 
-  depends_on = [module.eks, helm_release.external_secrets]
+  depends_on = [module.eks]
 }
 
 # ── External Secrets Operator ────────────────────────────────────────────────
@@ -18,6 +19,7 @@ resource "helm_release" "external_secrets" {
   name             = "external-secrets"
   repository       = "https://charts.external-secrets.io"
   chart            = "external-secrets"
+  version          = "0.9.20"
   namespace        = "external-secrets"
   create_namespace = true
 
@@ -41,6 +43,7 @@ resource "helm_release" "external_secrets" {
     value = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/DeployHubESO"
   }
 
+  # ESO depends on cert-manager being ready (it uses webhook TLS certs)
   depends_on = [module.eks, helm_release.cert_manager]
 }
 
@@ -239,6 +242,7 @@ resource "helm_release" "karpenter" {
   name             = "karpenter"
   repository       = "oci://public.ecr.aws/karpenter"
   chart            = "karpenter"
+  version          = "1.0.6"
   namespace        = "karpenter"
   create_namespace = true
 

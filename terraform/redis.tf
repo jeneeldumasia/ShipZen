@@ -37,5 +37,5 @@ resource "helm_release" "redis" {
     value = "redis-master"
   }
 
-  depends_on = [helm_release.postgresql]
+  depends_on = [module.eks]
 }
