@@ -77,11 +77,11 @@ In this session, we uncovered that static scanners (`tfsec`, `checkov`) are comp
 2. **OpenAPI Cache Race Conditions:** I assumed that using `kubectl apply --server-side` combined with `rm -rf ~/.kube/cache` would reliably bypass Kubernetes resource mapping errors when applying CRDs (like `ClusterSecretStore`) immediately after installing them. It did not. **Lesson:** The only bulletproof way to survive CRD eventual consistency in CI/CD pipelines is a hardcoded Bash `until` retry loop with a `sleep`. Do not trust cache-clearing commands alone.
 3. **Gateway API vs. Ingress:** We had an `HTTPRoute` for Grafana but absolutely no `Gateway` controller or resource provisioning the ALB. **Lesson:** Always manually trace network topologies end-to-end (Route -> Gateway -> Controller). Never assume the underlying infrastructure is automatically configured just because a route manifest exists.
 4. **ArgoCD Kustomize Blindspots:** I deleted `cluster-secret-store.yaml` but forgot to immediately remove its parent directory from the root `kustomization.yaml`, which silently broke ArgoCD syncs. **Lesson:** Every time a file or directory is moved/deleted, instantly `grep` the codebase for Kustomize and Helm references to it to prevent broken sync states.
-5. **Dual-Default StorageClasses & AWS Academy Limits:** We originally forced a `gp3` storage class. While this fixed the dual-default deadlock locally, deploying it into an AWS Learner Lab / Student Account caused the pipeline to fail with a 10-minute Postgres timeout. AWS Academy environments strictly block `gp3` SSD volume provisioning via IAM boundaries. **Lesson:** When dealing with student or restricted AWS accounts, always default to `gp2` storage.
+5. **Dual-Default StorageClasses & Strict IAM Boundaries:** We originally forced a `gp3` storage class. While this fixed the dual-default deadlock locally, deploying it into environments with strict IAM boundaries caused the pipeline to fail with a 10-minute Postgres timeout due to volume provisioning restrictions. **Lesson:** When dealing with strict IAM boundaries, always default to the universally supported `gp2` storage class unless `gp3` is explicitly whitelisted.
 
 ### 🚨 Pipeline Status
 - **Last Run:** FAILED. 
-- **Failure Cause:** 10-minute timeout on `helm_release.postgresql` due to the AWS Academy IAM boundary blocking the `gp3` volume creation. 
+- **Failure Cause:** 10-minute timeout on `helm_release.postgresql` due to strict IAM boundaries blocking `gp3` volume creation. 
 - **Current State:** A hotfix was pushed to downgrade the Postgres storage class back to the universally supported `gp2`. Awaiting pipeline completion.
 
 ---
