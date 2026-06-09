@@ -354,7 +354,7 @@ output "cluster_endpoint" {
 
 output "github_actions_role_arn" {
   description = "ARN of the GitHub Actions OIDC role — set as AWS_ROLE_ARN secret in GitHub"
-  value       = module.iam_github_oidc_role.iam_role_arn
+  value       = module.iam_github_oidc_role.arn
 }
 
 # ── Cert-Manager ───────────────────────────────────────────────────
