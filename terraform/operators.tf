@@ -131,7 +131,19 @@ resource "helm_release" "aws_load_balancer_controller" {
     value = module.irsa_alb_controller.iam_role_arn
   }
 
-  depends_on = [module.eks, module.irsa_alb_controller]
+  depends_on = [module.eks, module.irsa_alb_controller, null_resource.gateway_api_crds]
+}
+
+# ── Gateway API CRDs ─────────────────────────────────────────────────────────
+resource "null_resource" "gateway_api_crds" {
+  triggers = {
+    # Only run once or when cluster changes
+    cluster_name = module.eks.cluster_name
+  }
+  provisioner "local-exec" {
+    command = "aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster && kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.0.0/standard-install.yaml"
+  }
+  depends_on = [module.eks]
 }
 
 # ── ClusterSecretStore (ESO) ──────────────────────────────────────────────────
@@ -234,4 +246,14 @@ resource "helm_release" "karpenter" {
   }
 
   depends_on = [module.eks, helm_release.aws_load_balancer_controller]
+}
+
+resource "null_resource" "karpenter_nodepool" {
+  triggers = {
+    always_run = "${timestamp()}"
+  }
+  provisioner "local-exec" {
+    command = "aws eks update-kubeconfig --region ${var.aws_region} --name deployhub-cluster && kubectl apply -f karpenter-nodepool.yaml"
+  }
+  depends_on = [helm_release.karpenter]
 }

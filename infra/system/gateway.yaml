@@ -1,0 +1,24 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: alb
+spec:
+  controllerName: gateway.k8s.aws/alb
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: deployhub-gateway
+  namespace: deployhub-system
+  annotations:
+    # Tell the controller to make this an internet-facing ALB
+    application-networking.k8s.aws/scheme: "internet-facing"
+spec:
+  gatewayClassName: alb
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All

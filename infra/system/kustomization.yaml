@@ -10,3 +10,5 @@ resources:
   - certificate.yaml
   - alertmanager-config.yaml
   - cloudflare-secret.yaml
+  - gateway.yaml
+  - grafana-route.yaml
