@@ -14,17 +14,6 @@ locals {
   pg_port     = 5432
 }
 
-resource "kubernetes_storage_class" "gp3" {
-  metadata {
-    name = "gp3"
-  }
-  storage_provisioner = "ebs.csi.aws.com"
-  volume_binding_mode = "WaitForFirstConsumer"
-  parameters = {
-    type = "gp3"
-  }
-  depends_on = [module.eks]
-}
 
 resource "helm_release" "postgresql" {
   name             = "postgres"
@@ -61,11 +50,6 @@ resource "helm_release" "postgresql" {
   }
 
   set {
-    name  = "primary.persistence.storageClass"
-    value = kubernetes_storage_class.gp3.metadata[0].name
-  }
-
-  set {
     name  = "primary.persistence.size"
     value = "10Gi"
   }
@@ -87,7 +71,7 @@ resource "helm_release" "postgresql" {
     value = "true"
   }
 
-  depends_on = [helm_release.keda, kubernetes_storage_class.gp3, helm_release.karpenter]
+  depends_on = [helm_release.keda, helm_release.karpenter]
 }
 
 # Write a Kubernetes Secret containing the full DATABASE_URL connection string.
