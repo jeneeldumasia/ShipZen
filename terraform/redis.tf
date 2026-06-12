@@ -8,7 +8,6 @@ resource "helm_release" "redis" {
   name             = "redis"
   repository       = "https://charts.bitnami.com/bitnami"
   chart            = "redis"
-  version          = "19.6.4"
   namespace        = "deployhub-system"
   create_namespace = true
 

@@ -18,7 +18,6 @@ resource "helm_release" "postgresql" {
   name             = "postgres"
   repository       = "https://charts.bitnami.com/bitnami"
   chart            = "postgresql"
-  version          = "15.5.23"
   namespace        = "deployhub-system"
   create_namespace = true
 
