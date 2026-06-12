@@ -59,7 +59,11 @@ jobs:
           kubectl patch clusterpolicies.kyverno.io --all -p '{"metadata":{"finalizers":[]}}' --type=merge || true
           kubectl patch policies.kyverno.io --all -A -p '{"metadata":{"finalizers":[]}}' --type=merge || true
           helm uninstall kyverno -n kyverno --no-hooks || true
+          helm uninstall postgresql -n deployhub-system --no-hooks || true
+          helm uninstall redis -n deployhub-system --no-hooks || true
           terraform state rm helm_release.kyverno || true
+          terraform state rm helm_release.postgresql || true
+          terraform state rm helm_release.redis || true
 
       - name: Terraform Plan
         working-directory: ./terraform

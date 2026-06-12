@@ -21,5 +21,5 @@ variable "grafana_password" {
 variable "platform_instance_type" {
   description = "EC2 instance type for the platform node group"
   type        = string
-  default     = "t3.medium"
+  default     = "c7i-flex.large"
 }
