@@ -62,7 +62,7 @@ spec:
           values: ["on-demand"]
         - key: karpenter.k8s.aws/instance-category
           operator: In
-          values: ["m", "t3"]
+          values: ["m", "c"]
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass

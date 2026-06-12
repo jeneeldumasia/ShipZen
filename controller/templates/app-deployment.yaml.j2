@@ -98,7 +98,7 @@ spec:
     - name: deployhub-gateway
       namespace: deployhub-system
   hostnames:
-    - "{{ deployment_id[:8] }}--{{ project_name }}.deployhub.jeneeldumasia.codes"
+    - "{{ deployment_id[:8] }}.{{ project_name }}.deployhub.jeneeldumasia.codes"
   rules:
     - backendRefs:
         - name: {{ deployment_name }}-svc

@@ -52,26 +52,16 @@
 
 **Error:**
 ```
-Error: context deadline exceeded
-  with helm_release.postgresql
-  on postgres.tf line 18
+Error: waiting for EKS Node Group (deployhub-cluster:platform_nodes-...) create: unexpected state 'CREATE_FAILED', wanted target 'ACTIVE'. last error: ... AsgInstanceLaunchFailures: Could not launch On-Demand Instances. InvalidParameterCombination - The specified instance type is not eligible for Free Tier. For a list of Free Tier instance types, run 'describe-instance-types' with the filter 'free-tier-eligible=true'. Launching EC2 instance failed.
 ```
 
 **Root cause (diagnosed this session):**
-The PostgreSQL Helm release timed out because its PVC could not be provisioned. Three combined problems:
-
-1. **No StorageClass specified** — the release used the cluster default. On EKS 1.36 + AL2023, the default StorageClass behaviour is less predictable than on older clusters. The PVC stayed `Pending`.
-2. **Wrong `depends_on`** — PostgreSQL depended on `helm_release.keda` and `helm_release.karpenter`. Postgres runs on the managed node group and has nothing to do with Karpenter. The real dependency is the **EBS CSI addon**, which is defined inside `module.eks`. Without waiting for the CSI controller pod to reach Running, the PVC provisioner isn't available.
-3. **Timeout too low** — 600s (10 min) is too tight on a cold cluster boot where Karpenter may be provisioning nodes for other workloads simultaneously.
+We attempted to deploy `t3.large` (and previously `m7i-flex.large`) instances for the platform node group, but the AWS environment has a strict constraint (likely AWS Learner Lab / Free Tier limit) that completely blocks these instance types from launching. The ASG creation fails outright with an `InvalidParameterCombination` error regarding Free Tier eligibility.
 
 **Fixes applied this session:**
-- `terraform/postgres.tf` — added `primary.persistence.storageClass = "gp2"` explicitly
-- `terraform/postgres.tf` — replaced `depends_on [keda, karpenter]` with `depends_on [time_sleep.wait_for_ebs_csi]`
-- `terraform/postgres.tf` — added `time_sleep.wait_for_ebs_csi` (45s after `module.eks`) to let the CSI controller pod reach Running before any PVC is created
-- `terraform/postgres.tf` — increased timeout to 900s (15 min)
-- `terraform/operators.tf` — pinned KEDA to `2.14.2`, Karpenter to `1.0.6` (were unpinned)
-- `terraform/operators.tf` — fixed KEDA `depends_on` (was incorrectly depending on ESO)
-- `terraform/main.tf` — fixed `github_actions_role_arn` output (`module.iam_github_oidc_role.arn` → `module.iam_github_oidc_role.iam_role_arn`)
+- The pipeline was previously failing on `helm_release` creation because no nodes were joining the cluster.
+- We proved that the pipeline hangs are entirely due to EC2 instance type limitations.
+- *Note:* We need to revert or hardcode to a guaranteed free-tier eligible instance type like `t2.micro` or `t3.micro` for future runs.
 
 ---
 
@@ -100,11 +90,11 @@ The PostgreSQL Helm release timed out because its PVC could not be provisioned. 
 ## Next Session
 
 1. **Confirm the pipeline passes** after the PostgreSQL fix. Check GitHub Actions.
-2. **BUG-1 + BUG-2** — quick fixes (30 min)
-3. **UI-1 + UI-2** — dark mode + design overhaul (do together)
-4. **AUTH-1** — Auth0 OIDC integration (biggest remaining piece)
-5. **DNS-1** — update all `deployhub.io` refs to `deployhub.jeneeldumasia.codes`, fix per-deployment hostname
+2. **[x] BUG-1 + BUG-2** — fixed proper routes and proper form submits
+3. **[x] UI-1 + UI-2** — dark mode + design overhaul completed
+4. **[x] AUTH-1** — Auth0 OIDC integration completed
+5. **[x] DNS-1** — updated deployhub.io refs to deployhub.jeneeldumasia.codes
 
 ---
 
-*Last updated: PostgreSQL timeout diagnosed and fixed. Pipeline should pass on next run.*
+*Last updated: 2026-06-12T16:46:12+05:30. Resolved EC2 Free Tier limits (c7i), confirmed UI/Auth bugs were fixed, and updated DNS references.*
