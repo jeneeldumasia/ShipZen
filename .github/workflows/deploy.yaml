@@ -50,10 +50,6 @@ jobs:
           framework: terraform
           soft_fail: true # Set to false to block deployments on security issues
 
-      - name: Terraform Plan
-        working-directory: ./terraform
-        run: terraform plan -out=tfplan
-
       - name: Cleanup Stuck Webhooks
         working-directory: ./terraform
         run: |
@@ -64,6 +60,10 @@ jobs:
           kubectl patch policies.kyverno.io --all -A -p '{"metadata":{"finalizers":[]}}' --type=merge || true
           helm uninstall kyverno -n kyverno --no-hooks || true
           terraform state rm helm_release.kyverno || true
+
+      - name: Terraform Plan
+        working-directory: ./terraform
+        run: terraform plan -out=tfplan
 
       - name: Terraform Apply
         working-directory: ./terraform
