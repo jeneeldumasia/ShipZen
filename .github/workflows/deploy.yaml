@@ -74,3 +74,15 @@ jobs:
       - name: Terraform Apply
         working-directory: ./terraform
         run: terraform apply tfplan
+
+      - name: Output NLB URL
+        run: |
+          aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name deployhub-cluster
+          # Give the load balancer a moment to be registered
+          sleep 30
+          NLB_URL=$(kubectl get svc -A -o jsonpath="{.items[?(@.spec.type=='LoadBalancer')].status.loadBalancer.ingress[0].hostname}")
+          echo "Network Load Balancer URL: $NLB_URL"
+          echo "### Deployment Successful :rocket:" >> $GITHUB_STEP_SUMMARY
+          echo "The Network Load Balancer (NLB) URL is:" >> $GITHUB_STEP_SUMMARY
+          echo "\`$NLB_URL\`" >> $GITHUB_STEP_SUMMARY
+          echo "Please configure your Cloudflare CNAME records to point to this address." >> $GITHUB_STEP_SUMMARY
