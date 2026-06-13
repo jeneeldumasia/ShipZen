@@ -176,6 +176,19 @@ resource "null_resource" "gateway_api_crds" {
   depends_on = [module.eks]
 }
 
+# ── Envoy Gateway ────────────────────────────────────────────────────────────
+resource "helm_release" "envoy_gateway" {
+  name             = "eg"
+  repository       = "oci://docker.io/envoyproxy"
+  chart            = "gateway-helm"
+  version          = "v1.1.2"
+  namespace        = "envoy-gateway-system"
+  create_namespace = true
+
+  depends_on = [module.eks, null_resource.gateway_api_crds]
+}
+
+
 # ── ClusterSecretStore (ESO) ──────────────────────────────────────────────────
 # Task 19 / fix #5.9 + Task 18 / fix #4.1:
 # Manages the ClusterSecretStore via Terraform so the AWS region and account ID

@@ -55,6 +55,20 @@ resource "helm_release" "argocd" {
               namespace: deployhub-build
               jsonPointers:
                 - /spec/replicas
+        - name: deployhub-gateway
+          namespace: argocd
+          project: default
+          source:
+            repoURL: "https://github.com/jeneeldumasia/DeployHub.git"
+            targetRevision: HEAD
+            path: gateway
+          destination:
+            server: https://kubernetes.default.svc
+            namespace: default
+          syncPolicy:
+            automated:
+              prune: true
+              selfHeal: true
     EOT
   ]
 
