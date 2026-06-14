@@ -33,12 +33,14 @@ jobs:
         run: terraform init
 
       - name: Configure kubectl
-        run: aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name deployhub-cluster
+        run: |
+          aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name deployhub-cluster || echo "cluster_not_found=true" >> $GITHUB_ENV
 
       # Step 1: Suspend ArgoCD auto-sync FIRST.
       # If we skip this, ArgoCD's selfHeal will re-create every resource
       # we delete in the next steps, causing a race condition.
       - name: Suspend ArgoCD Auto-Sync
+        if: env.cluster_not_found != 'true'
         run: |
           kubectl patch application deployhub-platform \
             -n argocd \
@@ -51,6 +53,7 @@ jobs:
       # These nodes are NOT managed by Terraform, so we must remove them
       # explicitly — they hold ENIs that block VPC deletion.
       - name: Delete Karpenter NodePools and NodeClasses
+        if: env.cluster_not_found != 'true'
         run: |
           kubectl delete nodepool --all --ignore-not-found=true || true
           kubectl delete ec2nodeclass --all --ignore-not-found=true || true
@@ -59,6 +62,7 @@ jobs:
       # We identify them by the karpenter.sh/nodepool label.
       # This ensures their ENIs are released before Terraform runs.
       - name: Drain Karpenter Nodes
+        if: env.cluster_not_found != 'true'
         run: |
           KARPENTER_NODES=$(kubectl get nodes -l karpenter.sh/nodepool \
             -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || echo "")
@@ -82,6 +86,7 @@ jobs:
       # This is the #1 cause of VPC deletion failures — dangling ENIs from
       # load balancers that Terraform doesn't manage directly.
       - name: Delete LoadBalancer Services and HTTPRoutes
+        if: env.cluster_not_found != 'true'
         run: |
           # Delete gateway HTTPRoutes (tenant workload routes)
           kubectl delete httproute --all --all-namespaces --ignore-not-found=true || true
@@ -138,6 +143,7 @@ jobs:
       # Deleting system namespaces causes the EKS control plane to report errors
       # and can cause Terraform to hang waiting for node groups.
       - name: Delete Application Namespaces
+        if: env.cluster_not_found != 'true'
         run: |
           APP_NAMESPACES="argocd deployhub-system deployhub-build observability"
           
@@ -169,6 +175,7 @@ jobs:
       # (e.g. from ArgoCD or cert-manager) can hang in Terminating state
       # and hold resources that block Terraform.
       - name: Wait for Namespace Termination
+        if: env.cluster_not_found != 'true'
         run: |
           APP_NAMESPACES="argocd deployhub-system deployhub-build observability"
           MAX_WAIT=120
@@ -233,6 +240,7 @@ jobs:
       # fails to run or its webhooks cause a deadlock. Force uninstalling it
       # without hooks ensures Terraform can cleanly remove it from state.
       - name: Force Uninstall Problematic Helm Releases
+        if: env.cluster_not_found != 'true'
         run: |
           echo "Force uninstalling Kyverno without hooks..."
           helm uninstall kyverno-policies -n kyverno --no-hooks --ignore-not-found || true
