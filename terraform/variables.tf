@@ -18,6 +18,12 @@ variable "grafana_password" {
   sensitive   = true
 }
 
+variable "cloudflare_api_token" {
+  description = "Cloudflare API token for DNS-01 challenge (cert-manager). Must have Zone:DNS:Edit permission."
+  type        = string
+  sensitive   = true
+}
+
 variable "platform_instance_type" {
   description = "EC2 instance type for the platform node group"
   type        = string

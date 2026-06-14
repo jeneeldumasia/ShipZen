@@ -247,7 +247,7 @@ resource "aws_secretsmanager_secret" "cloudflare_api_token" {
 
 resource "aws_secretsmanager_secret_version" "cloudflare_api_token" {
   secret_id     = aws_secretsmanager_secret.cloudflare_api_token.id
-  secret_string = "placeholder" # User must manually update this in AWS Console
+  secret_string = jsonencode({ "api-token" = var.cloudflare_api_token })
 }
 
 # ── S3 Bucket for Build Logs ─────────────────────────────────────────────────
