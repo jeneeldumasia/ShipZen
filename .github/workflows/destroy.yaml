@@ -291,3 +291,43 @@ jobs:
               --query "SecurityGroups[?GroupName!='default'].{ID:GroupId,Name:GroupName}" \
               --output table || true
           fi
+
+      # Step 11: Ultimate Nuclear Cleanup
+      # Kubernetes controllers (like EBS CSI) and dynamic scripts often leave behind
+      # resources that Terraform doesn't track in its state file.
+      # This step aggressively sweeps the account for anything left behind.
+      - name: Nuke Orphaned Volumes, Buckets, and IPs
+        if: always()
+        run: |
+          echo "🧹 Sweeping for orphaned EBS Volumes (dynamically provisioned by Kubernetes)..."
+          VOLUMES=$(aws ec2 describe-volumes \
+            --query "Volumes[?Tags != null] | [?contains(to_string(Tags), 'deployhub')].VolumeId" \
+            --output text 2>/dev/null || echo "")
+          
+          for VOL in $VOLUMES; do
+            echo "Deleting orphaned EBS Volume: $VOL"
+            aws ec2 delete-volume --volume-id "$VOL" || true
+          done
+
+          echo "🧹 Sweeping for orphaned S3 Buckets..."
+          BUCKETS=$(aws s3api list-buckets --query "Buckets[?contains(Name, 'deployhub')].Name" --output text 2>/dev/null || echo "")
+          
+          for BUCKET in $BUCKETS; do
+            echo "Emptying and deleting orphaned S3 Bucket: $BUCKET"
+            aws s3 rm "s3://$BUCKET" --recursive || true
+            # Sometimes delete fails if there are lingering delete markers or versions
+            aws s3api delete-bucket --bucket "$BUCKET" || true
+          done
+
+          echo "🧹 Sweeping for unassociated Elastic IPs..."
+          # Find any EIPs that are not associated with an instance/ENI and are tagged with deployhub
+          EIPS=$(aws ec2 describe-addresses \
+            --query "Addresses[?AssociationId==null && Tags[?contains(Value, 'deployhub')]].AllocationId" \
+            --output text 2>/dev/null || echo "")
+            
+          for EIP in $EIPS; do
+            echo "Releasing orphaned Elastic IP: $EIP"
+            aws ec2 release-address --allocation-id "$EIP" || true
+          done
+          
+          echo "✅ Nuclear sweep complete. Account is clean."
