@@ -159,7 +159,7 @@ jobs:
 
           for NS in $ALL_NS; do
             echo "Deleting namespace: $NS"
-            kubectl delete namespace "$NS" --ignore-not-found=true || true
+            kubectl delete namespace "$NS" --ignore-not-found=true --wait=false || true
           done
 
       # Step 7: Wait for namespace termination. Namespaces with finalizers
