@@ -57,6 +57,34 @@ jobs:
           kubectl delete validatingwebhookconfigurations --all || true
           kubectl delete mutatingwebhookconfigurations --all || true
 
+      # Bootstrap: Ensure the GitHub Actions OIDC role has EKS cluster admin access.
+      # This uses the AWS API (not the Kubernetes API), so it works even when
+      # the role has zero Kubernetes RBAC permissions. Idempotent — safe to run
+      # on every deploy. Solves the chicken-and-egg problem where Terraform's
+      # kubernetes/helm providers need RBAC access that only Terraform can grant.
+      - name: Bootstrap EKS Access for GitHub Actions Role
+        run: |
+          ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID || '952994886652' }}:role/DeployHub-AA-SuperRole"
+          CLUSTER="deployhub-cluster"
+          REGION="${{ vars.AWS_REGION || 'us-east-1' }}"
+
+          echo "Ensuring EKS access entry exists for $ROLE_ARN..."
+          aws eks create-access-entry \
+            --cluster-name "$CLUSTER" \
+            --principal-arn "$ROLE_ARN" \
+            --type STANDARD \
+            --region "$REGION" 2>/dev/null || echo "Access entry already exists."
+
+          echo "Associating cluster admin policy..."
+          aws eks associate-access-policy \
+            --cluster-name "$CLUSTER" \
+            --principal-arn "$ROLE_ARN" \
+            --policy-arn "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy" \
+            --access-scope type=cluster \
+            --region "$REGION" 2>/dev/null || echo "Policy already associated."
+
+          echo "EKS access bootstrap complete."
+
       - name: Terraform Plan
         working-directory: ./terraform
         env:
