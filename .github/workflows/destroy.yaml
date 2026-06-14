@@ -121,8 +121,26 @@ jobs:
 
           echo "Found VPC: $VPC_ID"
 
-          # --- Delete ALL load balancers in this VPC ---
-          echo "=== Finding ALL load balancers in VPC $VPC_ID ==="
+          # --- Delete Classic ELBs (v1 API) ---
+          # Kubernetes cloud-controller-manager creates Classic ELBs when the
+          # AWS Load Balancer Controller isn't ready. These are INVISIBLE to
+          # the elbv2 API and must be found via the v1 elb API.
+          echo "=== Checking for Classic ELBs (v1) ==="
+          CLASSIC_LBS=$(aws elb describe-load-balancers \
+            --query "LoadBalancerDescriptions[?VPCId=='$VPC_ID'].LoadBalancerName" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$CLASSIC_LBS" ]; then
+            for LB_NAME in $CLASSIC_LBS; do
+              echo "Deleting Classic ELB: $LB_NAME"
+              aws elb delete-load-balancer --load-balancer-name "$LB_NAME" 2>/dev/null || true
+            done
+          else
+            echo "No Classic ELBs found."
+          fi
+
+          # --- Delete ALBs/NLBs (v2 API) ---
+          echo "=== Checking for ALBs/NLBs (v2) ==="
           ALL_LB_ARNS=$(aws elbv2 describe-load-balancers \
             --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
             --output text 2>/dev/null || echo "")
@@ -132,25 +150,29 @@ jobs:
               echo "Deleting load balancer: $ARN"
               aws elbv2 delete-load-balancer --load-balancer-arn "$ARN" 2>/dev/null || true
             done
-
-            echo "Waiting for load balancers to fully deprovision..."
-            MAX_WAIT=180
-            ELAPSED=0
-            while [ $ELAPSED -lt $MAX_WAIT ]; do
-              REMAINING=$(aws elbv2 describe-load-balancers \
-                --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
-                --output text 2>/dev/null || echo "")
-              if [ -z "$REMAINING" ]; then
-                echo "All load balancers deprovisioned."
-                break
-              fi
-              echo "Still waiting for LBs to deprovision... (${ELAPSED}s/${MAX_WAIT}s)"
-              sleep 15
-              ELAPSED=$((ELAPSED + 15))
-            done
           else
-            echo "No load balancers found in VPC."
+            echo "No ALBs/NLBs found."
           fi
+
+          # --- Wait for ALL LB ENIs to be fully released ---
+          echo "=== Waiting for LB ENIs to be released ==="
+          MAX_WAIT=180
+          ELAPSED=0
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            ELB_ENI_COUNT=$(aws ec2 describe-network-interfaces \
+              --filters "Name=vpc-id,Values=$VPC_ID" "Name=description,Values=ELB *" \
+              --query "length(NetworkInterfaces)" \
+              --output text 2>/dev/null || echo "0")
+
+            if [ "$ELB_ENI_COUNT" = "0" ]; then
+              echo "All LB ENIs released."
+              break
+            fi
+
+            echo "Still $ELB_ENI_COUNT LB ENIs in VPC... (${ELAPSED}s/${MAX_WAIT}s)"
+            sleep 15
+            ELAPSED=$((ELAPSED + 15))
+          done
 
           # --- Delete orphaned Target Groups in this VPC ---
           echo "=== Cleaning up orphaned Target Groups ==="
@@ -264,6 +286,73 @@ jobs:
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: terraform destroy -auto-approve
+        continue-on-error: true
+        id: first_destroy
+
+      # If first destroy failed, clean up again and retry
+      - name: Retry Cleanup and Terraform Destroy
+        if: steps.first_destroy.outcome == 'failure'
+        working-directory: ./terraform
+        env:
+          TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "First terraform destroy failed. Running cleanup and retrying..."
+
+          VPC_ID=$(aws ec2 describe-vpcs \
+            --filters "Name=tag:Name,Values=deployhub-vpc" \
+            --query "Vpcs[0].VpcId" \
+            --output text 2>/dev/null || echo "")
+
+          if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+            # Kill Classic ELBs
+            aws elb describe-load-balancers \
+              --query "LoadBalancerDescriptions[?VPCId=='$VPC_ID'].LoadBalancerName" \
+              --output text 2>/dev/null | xargs -n1 aws elb delete-load-balancer --load-balancer-name 2>/dev/null || true
+
+            # Kill v2 LBs
+            aws elbv2 describe-load-balancers \
+              --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
+              --output text 2>/dev/null | xargs -n1 aws elbv2 delete-load-balancer --load-balancer-arn 2>/dev/null || true
+
+            echo "Waiting 90s for AWS to release resources..."
+            sleep 90
+
+            # Force cleanup ENIs
+            aws ec2 describe-network-interfaces \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "NetworkInterfaces[*].{ID:NetworkInterfaceId,AttachId:Attachment.AttachmentId}" \
+              --output json 2>/dev/null | jq -r '.[] | "\(.ID) \(.AttachId)"' | while read ENI_ID ATTACH_ID; do
+                if [ "$ATTACH_ID" != "null" ] && [ -n "$ATTACH_ID" ]; then
+                  aws ec2 detach-network-interface --attachment-id "$ATTACH_ID" --force 2>/dev/null || true
+                  sleep 3
+                fi
+                aws ec2 delete-network-interface --network-interface-id "$ENI_ID" 2>/dev/null || true
+              done
+
+            # Release all EIPs in VPC
+            VPC_ENI_IDS=$(aws ec2 describe-network-interfaces \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "NetworkInterfaces[*].NetworkInterfaceId" \
+              --output text 2>/dev/null || echo "")
+            aws ec2 describe-addresses --query "Addresses[?Domain=='vpc']" --output json 2>/dev/null | \
+              jq -r '.[].AllocationId' | while read ALLOC; do
+                aws ec2 release-address --allocation-id "$ALLOC" 2>/dev/null || true
+              done
+
+            # Delete SGs
+            SG_IDS=$(aws ec2 describe-security-groups \
+              --filters "Name=vpc-id,Values=$VPC_ID" \
+              --query "SecurityGroups[?GroupName!='default'].GroupId" \
+              --output text 2>/dev/null || echo "")
+            for SG in $SG_IDS; do
+              aws ec2 revoke-security-group-ingress --group-id "$SG" \
+                --ip-permissions "$(aws ec2 describe-security-groups --group-ids "$SG" --query 'SecurityGroups[0].IpPermissions' --output json 2>/dev/null)" 2>/dev/null || true
+              aws ec2 delete-security-group --group-id "$SG" 2>/dev/null || true
+            done
+          fi
+
+          echo "Retrying terraform destroy..."
+          terraform destroy -auto-approve
 
       # Step 10: Final sanity check — confirm the VPC is gone.
       # If it still exists, print a warning with what's blocking it.
