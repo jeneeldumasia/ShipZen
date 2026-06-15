@@ -72,7 +72,7 @@ module "vpc" {
 # ── EKS ───────────────────────────────────────────────────────────────────────
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.0"
+  version = "~> 20.31"
 
   cluster_name    = "deployhub-cluster"
   cluster_version = "1.36"
@@ -403,7 +403,7 @@ output "github_actions_role_arn" {
 # ── Karpenter ────────────────────────────────────────────────────────────────
 module "karpenter" {
   source  = "terraform-aws-modules/eks/aws//modules/karpenter"
-  version = "~> 20.0"
+  version = "~> 20.31"
 
   cluster_name = module.eks.cluster_name
 
