@@ -304,7 +304,6 @@ jobs:
         working-directory: ./terraform
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TF_LOG: DEBUG
         run: terraform destroy -auto-approve
         continue-on-error: true
         id: first_destroy
@@ -315,7 +314,6 @@ jobs:
         working-directory: ./terraform
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          TF_LOG: DEBUG
         run: |
           echo "First terraform destroy failed. Running cleanup and retrying..."
 
