@@ -107,7 +107,7 @@ jobs:
       # Kubernetes auto-generates LB names (e.g. 'a96304a043ff34844875f422f978eb9a')
       # that do NOT contain 'deployhub', so name-based search misses them.
       # We find them by VPC ID instead — if it's in our VPC, it must go.
-      - name: Force Delete Load Balancers, ENIs, EIPs, and Security Groups
+      - name: Force Delete Load Balancers, Target Groups, ENIs, EIPs, and Security Groups
         run: |
           VPC_ID=$(aws ec2 describe-vpcs \
             --filters "Name=tag:Name,Values=deployhub-vpc" \
@@ -120,6 +120,18 @@ jobs:
           fi
 
           echo "Found VPC: $VPC_ID"
+
+          # --- Pre-clean orphaned Target Groups in this VPC ---
+          # Some stale TGs can block LB deletion/deregistration chains.
+          echo "=== Pre-cleaning orphaned Target Groups ==="
+          PRE_TG_ARNS=$(aws elbv2 describe-target-groups \
+            --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
+            --output text 2>/dev/null || echo "")
+
+          for TG in $PRE_TG_ARNS; do
+            echo "Pre-clean deleting target group: $TG"
+            aws elbv2 delete-target-group --target-group-arn "$TG" 2>/dev/null || true
+          done
 
           # --- Delete Classic ELBs (v1 API) ---
           # Kubernetes cloud-controller-manager creates Classic ELBs when the
@@ -292,6 +304,7 @@ jobs:
         working-directory: ./terraform
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_LOG: DEBUG
         run: terraform destroy -auto-approve
         continue-on-error: true
         id: first_destroy
@@ -302,6 +315,7 @@ jobs:
         working-directory: ./terraform
         env:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TF_LOG: DEBUG
         run: |
           echo "First terraform destroy failed. Running cleanup and retrying..."
 
@@ -311,6 +325,11 @@ jobs:
             --output text 2>/dev/null || echo "")
 
           if [ -n "$VPC_ID" ] && [ "$VPC_ID" != "None" ]; then
+            # Pre-clean orphaned target groups first (best-effort)
+            aws elbv2 describe-target-groups \
+              --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
+              --output text 2>/dev/null | xargs -n1 aws elbv2 delete-target-group --target-group-arn 2>/dev/null || true
+
             # Kill Classic ELBs
             aws elb describe-load-balancers \
               --query "LoadBalancerDescriptions[?VPCId=='$VPC_ID'].LoadBalancerName" \
@@ -320,6 +339,11 @@ jobs:
             aws elbv2 describe-load-balancers \
               --query "LoadBalancers[?VpcId=='$VPC_ID'].LoadBalancerArn" \
               --output text 2>/dev/null | xargs -n1 aws elbv2 delete-load-balancer --load-balancer-arn 2>/dev/null || true
+
+            # Retry target group cleanup after LB deletes
+            aws elbv2 describe-target-groups \
+              --query "TargetGroups[?VpcId=='$VPC_ID'].TargetGroupArn" \
+              --output text 2>/dev/null | xargs -n1 aws elbv2 delete-target-group --target-group-arn 2>/dev/null || true
 
             echo "Waiting 90s for AWS to release resources..."
             sleep 90
@@ -354,6 +378,8 @@ jobs:
             for SG in $SG_IDS; do
               aws ec2 revoke-security-group-ingress --group-id "$SG" \
                 --ip-permissions "$(aws ec2 describe-security-groups --group-ids "$SG" --query 'SecurityGroups[0].IpPermissions' --output json 2>/dev/null)" 2>/dev/null || true
+              aws ec2 revoke-security-group-egress --group-id "$SG" \
+                --ip-permissions "$(aws ec2 describe-security-groups --group-ids "$SG" --query 'SecurityGroups[0].IpPermissionsEgress' --output json 2>/dev/null)" 2>/dev/null || true
               aws ec2 delete-security-group --group-id "$SG" 2>/dev/null || true
             done
           fi
