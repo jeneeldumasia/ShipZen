@@ -44,6 +44,9 @@ spec:
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 1m
+  limits:
+    cpu: "50"
+    memory: "200Gi"
 ---
 # Tenant NodePool — stable on-demand nodes for user application workloads
 apiVersion: karpenter.sh/v1
@@ -74,3 +77,6 @@ spec:
   disruption:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 1m
+  limits:
+    cpu: "100"
+    memory: "400Gi"
