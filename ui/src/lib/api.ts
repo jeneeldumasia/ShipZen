@@ -4,8 +4,16 @@
  * backend API server — this keeps the backend URL server-side only.
  */
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
+let BASE = "http://localhost:8000";
+if (typeof window !== "undefined") {
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    BASE = "http://localhost:8000";
+  } else {
+    BASE = "https://api." + window.location.hostname;
+  }
+} else {
+  BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+}
 async function request<T>(
   path: string,
   options: RequestInit = {}

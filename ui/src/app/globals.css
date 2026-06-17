@@ -28,25 +28,25 @@
   }
 
   .dark {
-    --canvas-bg: #09090b;
-    --canvas-card: rgba(24, 24, 27, 0.6);
-    --canvas-border: rgba(39, 39, 42, 0.8);
+    --canvas-bg: #030712;
+    --canvas-card: rgba(15, 23, 42, 0.4);
+    --canvas-border: rgba(51, 65, 85, 0.4);
     
-    --sidebar-bg: rgba(9, 9, 11, 0.8);
-    --sidebar-border: rgba(39, 39, 42, 0.8);
-    --sidebar-hover: rgba(39, 39, 42, 0.9);
+    --sidebar-bg: rgba(2, 6, 23, 0.6);
+    --sidebar-border: rgba(30, 41, 59, 0.5);
+    --sidebar-hover: rgba(30, 41, 59, 0.6);
     --sidebar-active: #10b981;
-    --sidebar-text: #a1a1aa;
-    --sidebar-heading: #fafafa;
+    --sidebar-text: #94a3b8;
+    --sidebar-heading: #f8fafc;
     
-    --brand-default: #34d399;
-    --brand-hover: #10b981;
+    --brand-default: #10b981;
+    --brand-hover: #059669;
     --brand-light: rgba(16, 185, 129, 0.15);
-    --brand-muted: #6ee7b7;
-    --brand-glow: rgba(52, 211, 153, 0.4);
+    --brand-muted: #34d399;
+    --brand-glow: rgba(16, 185, 129, 0.3);
 
-    --text-primary: #fafafa;
-    --text-secondary: #a1a1aa;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
   }
 
   *, *::before, *::after {
@@ -100,7 +100,8 @@
   /* Input base */
   .input {
     @apply w-full border border-canvas-border rounded-lg px-3 py-2 text-sm
-           bg-transparent text-zinc-100 placeholder:text-zinc-500
+           bg-white/40 dark:bg-black/20 text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500
+           backdrop-blur-sm shadow-inner
            focus:outline-none focus:ring-2 focus:ring-brand focus:ring-opacity-50 focus:border-brand
            transition-colors duration-200;
   }
