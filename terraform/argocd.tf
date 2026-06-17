@@ -45,7 +45,7 @@ spec:
   syncPolicy:
     automated:
       prune: true
-      selfHeal: false
+      selfHeal: true
     syncOptions:
       - RespectIgnoreDifferences=true
   ignoreDifferences:
@@ -55,27 +55,14 @@ spec:
       namespace: deployhub-build
       jsonPointers:
         - /spec/replicas
----
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: deployhub-gateway
-  namespace: argocd
-spec:
-  project: default
-  source:
-    repoURL: "https://github.com/jeneeldumasia/DeployHub.git"
-    targetRevision: HEAD
-    path: gateway
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: deployhub-system
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
 EOF
 EOT
   }
-  depends_on = [helm_release.argocd]
+  depends_on = [
+    helm_release.argocd,
+    helm_release.envoy_gateway,
+    helm_release.aws_load_balancer_controller,
+    helm_release.external_secrets,
+    helm_release.cert_manager
+  ]
 }
