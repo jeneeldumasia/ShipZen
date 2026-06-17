@@ -6,47 +6,47 @@
 
 @layer base {
   :root {
-    --canvas-bg: #f8fafc;
-    --canvas-card: rgba(255, 255, 255, 0.7);
-    --canvas-border: rgba(226, 232, 240, 0.8);
+    --canvas-bg: #ffffff;
+    --canvas-card: #ffffff;
+    --canvas-border: #eaeaea;
     
-    --sidebar-bg: rgba(248, 250, 252, 0.8);
-    --sidebar-border: rgba(226, 232, 240, 0.8);
-    --sidebar-hover: rgba(241, 245, 249, 0.9);
-    --sidebar-active: #10b981;
-    --sidebar-text: #64748b;
-    --sidebar-heading: #0f172a;
+    --sidebar-bg: #fafafa;
+    --sidebar-border: #eaeaea;
+    --sidebar-hover: #f5f5f5;
+    --sidebar-active: #000000;
+    --sidebar-text: #666666;
+    --sidebar-heading: #000000;
     
-    --brand-default: #10b981;
-    --brand-hover: #059669;
-    --brand-light: #ecfdf5;
-    --brand-muted: #34d399;
-    --brand-glow: rgba(16, 185, 129, 0.4);
+    --brand-default: #000000;
+    --brand-hover: #333333;
+    --brand-light: #f5f5f5;
+    --brand-muted: #888888;
+    --brand-glow: rgba(0, 0, 0, 0.1);
 
-    --text-primary: #0f172a;
-    --text-secondary: #475569;
+    --text-primary: #000000;
+    --text-secondary: #666666;
   }
 
   .dark {
-    --canvas-bg: #030712;
-    --canvas-card: rgba(15, 23, 42, 0.4);
-    --canvas-border: rgba(51, 65, 85, 0.4);
+    --canvas-bg: #000000;
+    --canvas-card: #000000;
+    --canvas-border: #333333;
     
-    --sidebar-bg: rgba(2, 6, 23, 0.6);
-    --sidebar-border: rgba(30, 41, 59, 0.5);
-    --sidebar-hover: rgba(30, 41, 59, 0.6);
-    --sidebar-active: #10b981;
-    --sidebar-text: #94a3b8;
-    --sidebar-heading: #f8fafc;
+    --sidebar-bg: #0a0a0a;
+    --sidebar-border: #333333;
+    --sidebar-hover: #1a1a1a;
+    --sidebar-active: #ffffff;
+    --sidebar-text: #888888;
+    --sidebar-heading: #ffffff;
     
-    --brand-default: #10b981;
-    --brand-hover: #059669;
-    --brand-light: rgba(16, 185, 129, 0.15);
-    --brand-muted: #34d399;
-    --brand-glow: rgba(16, 185, 129, 0.3);
+    --brand-default: #ffffff;
+    --brand-hover: #e5e5e5;
+    --brand-light: #1a1a1a;
+    --brand-muted: #888888;
+    --brand-glow: rgba(255, 255, 255, 0.1);
 
-    --text-primary: #f8fafc;
-    --text-secondary: #94a3b8;
+    --text-primary: #ffffff;
+    --text-secondary: #888888;
   }
 
   *, *::before, *::after {
@@ -107,10 +107,9 @@
   }
   /* Primary button */
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 bg-gradient-to-tr from-brand-hover to-brand
-           text-white text-sm font-medium px-4 py-2 rounded-lg
+    @apply inline-flex items-center justify-center gap-2 bg-brand text-canvas-bg text-sm font-medium px-4 py-2 rounded-lg
            transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed
-           shadow-md shadow-emerald-500/30 hover:shadow-glow hover:-translate-y-0.5;
+           shadow-sm hover:shadow-glow hover:-translate-y-0.5 hover:bg-brand-hover;
   }
 
   /* Ghost button */
