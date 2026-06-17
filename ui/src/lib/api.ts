@@ -12,7 +12,11 @@ if (typeof window !== "undefined") {
     BASE = "https://api." + window.location.hostname;
   }
 } else {
-  BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  if (process.env.KUBERNETES_SERVICE_HOST) {
+    BASE = "http://deployhub-api.deployhub-system.svc.cluster.local:80";
+  } else {
+    BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  }
 }
 async function request<T>(
   path: string,

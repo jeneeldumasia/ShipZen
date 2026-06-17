@@ -41,7 +41,7 @@ export default function NewProjectPage() {
 
   return (
     <div className="max-w-xl">
-      <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-7 group">
+      <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-gray-700 mb-7 group">
         <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
         Back to Dashboard
       </Link>
@@ -51,8 +51,8 @@ export default function NewProjectPage() {
           <FolderGit2 size={20} className="text-brand" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">New Project</h1>
-          <p className="text-sm text-gray-500">A dedicated Kubernetes namespace with full isolation</p>
+          <h1 className="text-xl font-semibold text-text-primary">New Project</h1>
+          <p className="text-sm text-text-secondary">A dedicated Kubernetes namespace with full isolation</p>
         </div>
       </div>
 
@@ -93,19 +93,19 @@ export default function NewProjectPage() {
                 placeholder="my-app"
                 required
               />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-secondary pointer-events-none">
                 auto-generated
               </span>
             </div>
-            <p className="text-xs text-gray-400 mt-1.5">
+            <p className="text-xs text-text-secondary mt-1.5">
               Lowercase letters, numbers, and hyphens. 3–63 characters.
             </p>
           </div>
 
           {/* Preview pill */}
           {namespace && (
-            <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-slate-600">
-              <span className="text-slate-400">Namespace:</span>
+            <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-text-secondary">
+              <span className="text-text-secondary">Namespace:</span>
               <code className="font-mono text-brand font-medium">{namespace}</code>
             </div>
           )}

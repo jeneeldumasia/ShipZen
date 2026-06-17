@@ -30,7 +30,7 @@ function Pipeline({ state }: { state: string }) {
                 done   ? "bg-emerald-500 border-emerald-500 text-white"            : "",
                 active ? "bg-brand border-brand text-white shadow-glow animate-pulse-slow" : "",
                 failed ? "bg-red-500 border-red-500 text-white"                    : "",
-                !done && !active && !failed ? "bg-white border-slate-200 text-slate-400" : "",
+                !done && !active && !failed ? "bg-white border-slate-200 text-text-secondary" : "",
               ].join(" ")}>
                 {done ? "✓" : i + 1}
               </div>
@@ -39,7 +39,7 @@ function Pipeline({ state }: { state: string }) {
                 active ? "text-brand"    : "",
                 done   ? "text-emerald-600" : "",
                 failed ? "text-red-600"  : "",
-                !done && !active && !failed ? "text-slate-400" : "",
+                !done && !active && !failed ? "text-text-secondary" : "",
               ].join(" ")}>
                 {step}
               </span>
@@ -79,7 +79,7 @@ export default async function DeploymentPage({ params }: { params: { id: string;
     <div>
       {isActive && <AutoRefresh projectId={params.id} deploymentId={params.depId} />}
 
-      <Link href={`/projects/${params.id}`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-6 group">
+      <Link href={`/projects/${params.id}`} className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-gray-700 mb-6 group">
         <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
         Back to Project
       </Link>
@@ -146,11 +146,11 @@ export default async function DeploymentPage({ params }: { params: { id: string;
           { label: "Last Updated",  value: new Date(deployment.updated_at).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }), icon: RefreshCw },
         ].map(({ label, value, icon: Icon, mono }) => (
           <div key={label} className="card px-4 py-3">
-            <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-1">
+            <div className="flex items-center gap-1.5 text-xs text-text-secondary mb-1">
               <Icon size={12} />
               {label}
             </div>
-            <p className={`text-sm font-semibold text-gray-900 ${mono ? "font-mono" : ""}`}>{value}</p>
+            <p className={`text-sm font-semibold text-text-primary ${mono ? "font-mono" : ""}`}>{value}</p>
           </div>
         ))}
       </div>
@@ -158,10 +158,10 @@ export default async function DeploymentPage({ params }: { params: { id: string;
       {/* Build history */}
       <div className="card overflow-hidden mb-6">
         <div className="px-6 py-4 border-b border-canvas-border">
-          <h2 className="text-sm font-semibold text-gray-800">Build History</h2>
+          <h2 className="text-sm font-semibold text-text-primary">Build History</h2>
         </div>
         {buildList.length === 0 ? (
-          <div className="px-6 py-8 text-sm text-gray-400 text-center">
+          <div className="px-6 py-8 text-sm text-text-secondary text-center">
             No builds recorded yet. Builds appear here once the builder picks up this deployment.
           </div>
         ) : (
@@ -169,22 +169,22 @@ export default async function DeploymentPage({ params }: { params: { id: string;
             <thead>
               <tr className="border-b border-canvas-border bg-slate-50/60">
                 {["Build ID", "Status", "Started", "Completed", "Logs"].map(h => (
-                  <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-canvas-border">
               {buildList.map(b => (
                 <tr key={b.build_id} className="table-row-hover">
-                  <td className="px-6 py-3 font-mono text-xs text-gray-600">{b.build_id.slice(0, 8)}…</td>
+                  <td className="px-6 py-3 font-mono text-xs text-text-secondary">{b.build_id.slice(0, 8)}…</td>
                   <td className="px-6 py-3"><StatusBadge status={b.status} /></td>
-                  <td className="px-6 py-3 text-xs text-gray-400">{new Date(b.started_at).toLocaleString()}</td>
-                  <td className="px-6 py-3 text-xs text-gray-400">{b.completed_at ? new Date(b.completed_at).toLocaleString() : "—"}</td>
+                  <td className="px-6 py-3 text-xs text-text-secondary">{new Date(b.started_at).toLocaleString()}</td>
+                  <td className="px-6 py-3 text-xs text-text-secondary">{b.completed_at ? new Date(b.completed_at).toLocaleString() : "—"}</td>
                   <td className="px-6 py-3">
                     {b.s3_log_uri ? (
                       <LogViewer projectId={params.id} deploymentId={params.depId} buildId={b.build_id} />
                     ) : (
-                      <span className="text-xs text-gray-500">—</span>
+                      <span className="text-xs text-text-secondary">—</span>
                     )}
                   </td>
                 </tr>
@@ -197,30 +197,30 @@ export default async function DeploymentPage({ params }: { params: { id: string;
       {/* Audit log */}
       <div className="card overflow-hidden">
         <div className="px-6 py-4 border-b border-canvas-border">
-          <h2 className="text-sm font-semibold text-gray-800">Audit Log</h2>
+          <h2 className="text-sm font-semibold text-text-primary">Audit Log</h2>
         </div>
         {auditList.length === 0 ? (
-          <div className="px-6 py-8 text-sm text-gray-400 text-center">No audit events yet.</div>
+          <div className="px-6 py-8 text-sm text-text-secondary text-center">No audit events yet.</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-canvas-border bg-slate-50/60">
                 {["Time", "Action", "Resource", "Details"].map(h => (
-                  <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
+                  <th key={h} className="text-left px-6 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-canvas-border">
               {auditList.map(a => (
                 <tr key={a.id} className="table-row-hover">
-                  <td className="px-6 py-3 text-xs text-gray-400 whitespace-nowrap">
+                  <td className="px-6 py-3 text-xs text-text-secondary whitespace-nowrap">
                     {new Date(a.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                   </td>
                   <td className="px-6 py-3">
                     <code className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-medium">{a.action}</code>
                   </td>
-                  <td className="px-6 py-3 text-xs text-gray-500">{a.resource_type}</td>
-                  <td className="px-6 py-3 text-xs text-gray-400 font-mono truncate max-w-xs">{JSON.stringify(a.details)}</td>
+                  <td className="px-6 py-3 text-xs text-text-secondary">{a.resource_type}</td>
+                  <td className="px-6 py-3 text-xs text-text-secondary font-mono truncate max-w-xs">{JSON.stringify(a.details)}</td>
                 </tr>
               ))}
             </tbody>

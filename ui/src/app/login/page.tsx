@@ -4,8 +4,8 @@ export default function LoginPage() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-mesh">
       <div className="card w-[400px] p-8 text-center shadow-xl">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900 mb-2">DeployHub</h1>
-        <p className="text-gray-500 mb-8">
+        <h1 className="text-2xl font-bold tracking-tight text-text-primary mb-2">DeployHub</h1>
+        <p className="text-text-secondary mb-8">
           Authenticate to access your cloud environments
         </p>
         <form

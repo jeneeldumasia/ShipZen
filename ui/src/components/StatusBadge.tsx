@@ -8,7 +8,7 @@ const CONFIG: Record<string, { dot: string; bg: string; text: string }> = {
   Ready:        { dot: "bg-emerald-400",                bg: "bg-emerald-50 border-emerald-200", text: "text-emerald-700" },
   Terminating:  { dot: "bg-orange-400 animate-pulse",   bg: "bg-orange-50  border-orange-200", text: "text-orange-700" },
   // Deployment
-  Queued:       { dot: "bg-slate-400",                  bg: "bg-slate-50   border-slate-200",  text: "text-slate-600" },
+  Queued:       { dot: "bg-slate-400",                  bg: "bg-slate-50   border-slate-200",  text: "text-text-secondary" },
   Building:     { dot: "bg-blue-400 animate-pulse",     bg: "bg-blue-50    border-blue-200",   text: "text-blue-700" },
   Deploying:    { dot: "bg-cyan-400 animate-pulse",     bg: "bg-cyan-50    border-cyan-200",   text: "text-cyan-700" },
   Verifying:    { dot: "bg-violet-400 animate-pulse",   bg: "bg-violet-50  border-violet-200", text: "text-violet-700" },
@@ -21,7 +21,7 @@ const CONFIG: Record<string, { dot: string; bg: string; text: string }> = {
   "In Progress":{ dot: "bg-blue-400 animate-pulse",     bg: "bg-blue-50    border-blue-200",   text: "text-blue-700" },
 };
 
-const FALLBACK = { dot: "bg-gray-400", bg: "bg-gray-50 border-gray-200", text: "text-gray-600" };
+const FALLBACK = { dot: "bg-gray-400", bg: "bg-gray-50 border-gray-200", text: "text-text-secondary" };
 
 export function StatusBadge({ status, size = "sm" }: { status: Status; size?: "sm" | "md" }) {
   const cfg = CONFIG[status] ?? FALLBACK;

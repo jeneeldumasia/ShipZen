@@ -23,6 +23,10 @@ const config: Config = {
           card:   "var(--canvas-card)",
           border: "var(--canvas-border)",
         },
+        text: {
+          primary: "var(--text-primary)",
+          secondary: "var(--text-secondary)",
+        },
         brand: {
           DEFAULT: "var(--brand-default)",
           hover:   "var(--brand-hover)",

@@ -37,7 +37,7 @@ export default function NewDeploymentPage() {
 
   return (
     <div className="max-w-xl">
-      <Link href={`/projects/${projectId}`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 mb-7 group">
+      <Link href={`/projects/${projectId}`} className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-gray-700 mb-7 group">
         <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
         Back to Project
       </Link>
@@ -47,8 +47,8 @@ export default function NewDeploymentPage() {
           <Rocket size={20} className="text-brand" />
         </div>
         <div>
-          <h1 className="text-xl font-semibold text-gray-900">New Deployment</h1>
-          <p className="text-sm text-gray-500">Paste your repo — the platform handles the rest</p>
+          <h1 className="text-xl font-semibold text-text-primary">New Deployment</h1>
+          <p className="text-sm text-text-secondary">Paste your repo — the platform handles the rest</p>
         </div>
       </div>
 
@@ -64,7 +64,7 @@ export default function NewDeploymentPage() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Repository URL</label>
           <div className="relative">
-            <Globe size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <Globe size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
             <input
               className="input pl-9 font-mono"
               type="text"
@@ -75,7 +75,7 @@ export default function NewDeploymentPage() {
               autoFocus
             />
           </div>
-          <p className="text-xs text-gray-400 mt-1.5">
+          <p className="text-xs text-text-secondary mt-1.5">
             Public or private GitHub/GitLab repo. No Dockerfile needed — language is auto-detected.
           </p>
         </div>
@@ -84,7 +84,7 @@ export default function NewDeploymentPage() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1.5">Branch</label>
           <div className="relative">
-            <GitBranch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <GitBranch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
             <input
               className="input pl-9 font-mono"
               type="text"
@@ -100,7 +100,7 @@ export default function NewDeploymentPage() {
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 font-medium"
+            className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-gray-700 font-medium"
           >
             <Settings2 size={13} />
             Advanced options
@@ -119,7 +119,7 @@ export default function NewDeploymentPage() {
                   onChange={e => setPort(Number(e.target.value))}
                   className="input w-32"
                 />
-                <p className="text-xs text-gray-400 mt-1.5">
+                <p className="text-xs text-text-secondary mt-1.5">
                   The port your app listens on. Defaults to 8080.
                   Can also be set via <code className="bg-slate-100 px-1 rounded">deployhub.yaml</code> in your repo.
                 </p>

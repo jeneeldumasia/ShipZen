@@ -15,7 +15,7 @@ export function MetricCard({
   trend?: string;
 }) {
   const colors = {
-    default: { icon: "text-gray-400 bg-gray-100",  value: "text-gray-900" },
+    default: { icon: "text-text-secondary bg-gray-100",  value: "text-text-primary" },
     green:   { icon: "text-emerald-600 bg-emerald-50", value: "text-emerald-700" },
     blue:    { icon: "text-blue-600 bg-blue-50",   value: "text-blue-700" },
     red:     { icon: "text-red-600 bg-red-50",     value: "text-red-700" },
@@ -27,7 +27,7 @@ export function MetricCard({
   return (
     <div className="metric-tile group hover:shadow-card-hover transition-shadow duration-200">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</p>
+        <p className="text-xs font-medium text-text-secondary uppercase tracking-wide">{label}</p>
         {Icon && (
           <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center", c.icon)}>
             <Icon size={15} />
@@ -35,7 +35,7 @@ export function MetricCard({
         )}
       </div>
       <p className={cn("text-3xl font-bold tabular-nums mt-1", c.value)}>{value}</p>
-      {trend && <p className="text-xs text-gray-400 mt-0.5">{trend}</p>}
+      {trend && <p className="text-xs text-text-secondary mt-0.5">{trend}</p>}
     </div>
   );
 }

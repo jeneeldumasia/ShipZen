@@ -60,9 +60,9 @@ export function LogViewer({ projectId, deploymentId, buildId }: { projectId: str
               <div className="flex items-center gap-2 text-zinc-100">
                 <Terminal size={16} className="text-brand" />
                 <h3 className="font-semibold text-sm font-mono">Build Logs</h3>
-                <span className="text-xs text-zinc-500 font-mono ml-2">{buildId.slice(0, 8)}</span>
+                <span className="text-xs text-text-secondary font-mono ml-2">{buildId.slice(0, 8)}</span>
               </div>
-              <button onClick={() => setOpen(false)} className="text-zinc-400 hover:text-white transition-colors">
+              <button onClick={() => setOpen(false)} className="text-text-secondary hover:text-white transition-colors">
                 <X size={18} />
               </button>
             </div>

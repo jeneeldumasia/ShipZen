@@ -53,16 +53,16 @@ export default async function ProjectsPage() {
                       <FolderGit2 size={20} className="text-brand" />
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900 group-hover:text-brand transition-colors">{p.name}</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">{p.namespace}</p>
+                      <h3 className="font-semibold text-text-primary group-hover:text-brand transition-colors">{p.name}</h3>
+                      <p className="text-xs text-text-secondary mt-0.5">{p.namespace}</p>
                     </div>
                   </div>
                   <StatusBadge status={p.status} />
                 </div>
                 
-                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-gray-500">
+                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-text-secondary">
                   <div className="flex items-center gap-1.5">
-                    <Clock size={13} className="text-gray-400" />
+                    <Clock size={13} className="text-text-secondary" />
                     <span>Created {new Date(p.created_at).toLocaleDateString()}</span>
                   </div>
                 </div>

@@ -53,25 +53,25 @@ export function CommandPalette() {
           <div className="flex items-center px-4 border-b border-zinc-800">
             <Command.Input 
               placeholder="Search projects or run a command..." 
-              className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-zinc-500 py-4 focus:outline-none"
+              className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-text-secondary py-4 focus:outline-none"
             />
-            <button onClick={() => setOpen(false)} className="text-zinc-500 hover:text-zinc-300 ml-2">
+            <button onClick={() => setOpen(false)} className="text-text-secondary hover:text-zinc-300 ml-2">
               <X size={16} />
             </button>
           </div>
           
           <Command.List className="max-h-[300px] overflow-y-auto p-2">
-            <Command.Empty className="py-6 text-center text-sm text-zinc-500">
+            <Command.Empty className="py-6 text-center text-sm text-text-secondary">
               {loading ? "Loading..." : "No results found."}
             </Command.Empty>
 
-            <Command.Group heading="Actions" className="px-2 py-1.5 text-xs font-medium text-zinc-500">
+            <Command.Group heading="Actions" className="px-2 py-1.5 text-xs font-medium text-text-secondary">
               <Command.Item 
                 onSelect={() => { setOpen(false); router.push("/projects/new"); }}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer aria-selected:bg-brand aria-selected:text-white transition-colors"
               >
                 <Plus size={14} /> New Project
-                <span className="ml-auto text-[10px] text-zinc-500 aria-selected:text-white/70">N</span>
+                <span className="ml-auto text-[10px] text-text-secondary aria-selected:text-white/70">N</span>
               </Command.Item>
               <Command.Item 
                 onSelect={() => { setOpen(false); router.push("/"); }}
@@ -82,7 +82,7 @@ export function CommandPalette() {
             </Command.Group>
 
             {projects.length > 0 && (
-              <Command.Group heading="Projects" className="px-2 py-1.5 text-xs font-medium text-zinc-500 mt-2">
+              <Command.Group heading="Projects" className="px-2 py-1.5 text-xs font-medium text-text-secondary mt-2">
                 {projects.map((p) => (
                   <Command.Item
                     key={p.id}
@@ -90,9 +90,9 @@ export function CommandPalette() {
                     onSelect={() => { setOpen(false); router.push(`/projects/${p.id}`); }}
                     className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer aria-selected:bg-zinc-800 aria-selected:text-white transition-colors"
                   >
-                    <FolderGit2 size={14} className="text-zinc-500" />
+                    <FolderGit2 size={14} className="text-text-secondary" />
                     {p.name}
-                    <span className="ml-2 text-[10px] text-zinc-600 font-mono">{p.namespace}</span>
+                    <span className="ml-2 text-[10px] text-text-secondary font-mono">{p.namespace}</span>
                   </Command.Item>
                 ))}
               </Command.Group>
