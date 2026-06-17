@@ -12,3 +12,18 @@ resources:
   - api/
   - builder/
   - scale/
+  - ui/
+
+images:
+  - name: deployhub-api
+    newName: ghcr.io/jeneeldumasia/deployhub-api
+    newTag: latest
+  - name: deployhub-controller
+    newName: ghcr.io/jeneeldumasia/deployhub-controller
+    newTag: latest
+  - name: deployhub-worker
+    newName: ghcr.io/jeneeldumasia/deployhub-worker
+    newTag: latest
+  - name: deployhub-ui
+    newName: ghcr.io/jeneeldumasia/deployhub-ui
+    newTag: latest

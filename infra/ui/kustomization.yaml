@@ -4,6 +4,4 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - service.yaml
-  - serviceaccount.yaml
   - httproute.yaml
-  - networkpolicy.yaml
