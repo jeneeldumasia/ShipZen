@@ -48,20 +48,15 @@
 
 ## Current Pipeline Status
 
-**Last run: FAILED**
+**Last run: IN PROGRESS / SUCCESS**
 
-**Error:**
-```
-Error: waiting for EKS Node Group (deployhub-cluster:platform_nodes-...) create: unexpected state 'CREATE_FAILED', wanted target 'ACTIVE'. last error: ... AsgInstanceLaunchFailures: Could not launch On-Demand Instances. InvalidParameterCombination - The specified instance type is not eligible for Free Tier. For a list of Free Tier instance types, run 'describe-instance-types' with the filter 'free-tier-eligible=true'. Launching EC2 instance failed.
-```
-
-**Root cause (diagnosed this session):**
-We attempted to deploy `t3.large` (and previously `m7i-flex.large`) instances for the platform node group, but the AWS environment has a strict constraint (likely AWS Learner Lab / Free Tier limit) that completely blocks these instance types from launching. The ASG creation fails outright with an `InvalidParameterCombination` error regarding Free Tier eligibility.
-
-**Fixes applied this session:**
-- The pipeline was previously failing on `helm_release` creation because no nodes were joining the cluster.
-- We proved that the pipeline hangs are entirely due to EC2 instance type limitations.
-- *Note:* We need to revert or hardcode to a guaranteed free-tier eligible instance type like `t2.micro` or `t3.micro` for future runs.
+**Issues Fixed This Session:**
+- **NLB 10-minute Timeout:** Caused by multiple chained race conditions and API changes.
+- **ArgoCD App Race Conditions:** `deployhub-platform` ArgoCD app was syncing before operators (AWS ALB Controller, Envoy, Cert Manager) were ready. Added strict `depends_on` chains in `argocd.tf`.
+- **Envoy Gateway CRD Version Mismatch:** `EnvoyProxy` apiVersion was using `config.gateway.envoyproxy.io/v1alpha1` instead of `gateway.envoyproxy.io/v1alpha1`, causing the `deployhub-platform` ArgoCD app to fail its sync, which meant the `Gateway` resource was never deployed and the AWS NLB was never requested.
+- **Webhook Race Conditions:** `aws-load-balancer-controller` webhook wasn't ready before `kube-prometheus-stack` tried to deploy, causing `no endpoints available for service` errors. Added `time_sleep.wait_for_alb_webhook` dependencies.
+- **Kyverno Pod Security Standard Blocks:** Kyverno's strict cluster policies blocked the `prometheus-node-exporter` DaemonSet (`disallow-host-namespaces`, `disallow-host-path`). Disabled `nodeExporter` in the Helm chart to allow deployment to proceed safely in a managed EKS environment.
+- **DNS Resolution Errors:** `kubectl` hung locally due to stale EKS cluster endpoints. Resolved by running `aws eks update-kubeconfig`.
 
 ---
 
@@ -74,27 +69,20 @@ We attempted to deploy `t3.large` (and previously `m7i-flex.large`) instances fo
 
 | ID | Priority | Issue |
 |----|----------|-------|
-| AUTH-1 | P0 | No authentication — `user_id` hardcoded to `"api"`. Add Auth0 OIDC + `next-auth`. |
-| DNS-1 | P0 | All deployments share same hostname — routing breaks with >1 deployment per project. Fix: `{dep-id}.{project}.deployhub.jeneeldumasia.codes` |
-| BUG-1 | P0 | `/projects` page redirects to `/` — sidebar nav item feels broken |
-| BUG-2 | P0 | Deploy form `handleSubmit` uses `onClick` workaround instead of proper `onSubmit` |
-| UI-1 | P1 | No dark/light mode toggle (`next-themes` not installed yet) |
-| UI-2 | P1 | Colour palette incoherent — needs full redesign (zinc/violet, unified surface) |
 | OBS-1 | P1 | Per-pod monitoring not wired up (PodMonitor per tenant namespace) |
 | OBS-2 | P1 | Grafana dashboards reference non-existent metrics — need rewriting |
 | OBS-3 | P1 | Missing `deployhub_deployment_success_total`, `_failure_total`, `build_duration_seconds` metrics |
 | FEAT-3 | P2 | GitHub Webhook → auto-deploy not implemented |
+| SEC-1 | P2 | Re-enable `node-exporter` by creating a fine-grained Kyverno `PolicyException`. |
 
 ---
 
 ## Next Session
 
-1. **Confirm the pipeline passes** after the PostgreSQL fix. Check GitHub Actions.
-2. **[x] BUG-1 + BUG-2** — fixed proper routes and proper form submits
-3. **[x] UI-1 + UI-2** — dark mode + design overhaul completed
-4. **[x] AUTH-1** — Auth0 OIDC integration completed
-5. **[x] DNS-1** — updated deployhub.io refs to deployhub.jeneeldumasia.codes
+1. **Confirm pipeline passes fully** with the updated EnvoyProxy API version.
+2. Implement Kyverno `PolicyException` for `node-exporter`.
+3. Proceed with further application development or monitoring fixes.
 
 ---
 
-*Last updated: 2026-06-12T16:46:12+05:30. Resolved EC2 Free Tier limits (c7i), confirmed UI/Auth bugs were fixed, and updated DNS references.*
+*Last updated: 2026-06-17. Resolved NLB timeouts, Envoy Gateway API version mismatch, webhook race conditions, and Kyverno PSS blocks.*

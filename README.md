@@ -21,8 +21,8 @@ Before running the GitHub Actions deployment pipeline, you **must** configure th
 ## 🏗️ Architecture
 
 - **Worker (`worker/`):** Asynchronous Python daemon handling Redis Streams to orchestrate deployment tasks.
-- **Builder (`builder/`):** Autoscaling pool using `pack` and `kaniko` for rootless container generation, streaming logs directly to S3.
+- **Builder (`builder/`):** Autoscaling pool using Cloud Native Buildpacks (`pack`) for rootless container generation, streaming logs directly to S3.
 - **Controller (`controller/`):** Python-based continuous Reconciliation Engine resolving drift against PostgreSQL desired state.
-- **Gateway (`gateway/`):** Envoy Gateway managing strict TLS-terminated wildcard host routing.
+- **Gateway (Envoy Gateway):** Managed via ArgoCD, providing strict TLS-terminated wildcard host routing.
 
 For deeper technical specifics, Threat Models, and Architecture Diagrams, please consult the `docs/` directory.
