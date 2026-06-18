@@ -90,7 +90,8 @@ images:
 
   - name: shipzen-ui
     newName: ghcr.io/jeneeldumasia/shipzen-ui
-    newTag: sha-f21a90e
+    newTag: sha-db93ba7
+
 
 
 
