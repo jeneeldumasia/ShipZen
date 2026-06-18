@@ -1,4 +1,4 @@
-name: Deploy Platform (Terraform + ArgoCD)
+name: Deploy Platform Infra
 
 on:
   push:

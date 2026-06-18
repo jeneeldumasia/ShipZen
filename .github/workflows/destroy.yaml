@@ -1,5 +1,4 @@
-name: Destroy Platform (Cost Saving)
-
+name: Infra Teardown
 on:
   workflow_dispatch: # Manual trigger only to prevent accidental destruction
 
