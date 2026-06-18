@@ -43,3 +43,19 @@ resource "aws_eks_access_policy_association" "github_actions" {
     type = "cluster"
   }
 }
+
+resource "aws_iam_role_policy" "github_actions_eks" {
+  name = "ShipZenGitHubActionsEKS"
+  role = aws_iam_role.github_actions.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "eks:DescribeCluster"
+        Resource = module.eks.cluster_arn
+      }
+    ]
+  })
+}
