@@ -57,7 +57,8 @@ images:
 
   - name: shipzen-ui
     newName: ghcr.io/jeneeldumasia/shipzen-ui
-    newTag: sha-1863a33
+    newTag: sha-2179d9e
+
 
 
 
