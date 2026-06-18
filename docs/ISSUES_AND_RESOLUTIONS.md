@@ -31,6 +31,12 @@ This document tracks recently encountered infrastructure, deployment, and UI iss
 - **Resolution:** Generated a new, minimalist white rocket icon on a solid black background using the image generator tool. Replaced `favicon.ico` with the new `icon.png` in `ui/src/app` to apply the ShipZen branding to the browser tab.
 
 
+### 7. Builder Pods Not Scaling from Zero (Stuck on Building)
+- **Issue:** Deployments would get permanently stuck on the "Building" phase because the builder pods failed to scale up from zero. This was caused by two intertwined KEDA issues:
+  1. KEDA's `redis-streams` scaler requires the `builder_group` consumer group to already exist in Redis. If the builder pods are at 0, they can't create it, causing a `NOGROUP` error in KEDA.
+  2. The ScaledObject was using `pendingEntriesCount: "1"`, which only scales based on messages currently being processed (in the Pending Entries List). Without consumers, the PEL remains 0 forever.
+- **Resolution:** Modified `worker/main.py` to ensure the consumer group is initialized upon worker startup. Updated `infra/builder/scaledobject.yaml` to use `lagCount: "1"` and `activationLagCount: "0"` instead, enabling KEDA to correctly measure the queue backlog and scale to zero.
+
 ## Identified Flaws
 
 ### 🔴 Critical — Logic Bugs That Will Cause Failures
