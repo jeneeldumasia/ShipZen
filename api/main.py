@@ -28,7 +28,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi import Request
 
-from database import get_connection
+from database import get_connection, init_db
+from contextlib import asynccontextmanager
 from audit import log_audit_event
 from auth import get_current_user, User
 
@@ -63,10 +64,16 @@ def get_redis() -> redis_lib.Redis:
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
 app = FastAPI(
     title="ShipZen API",
     description="Internal Developer Platform — deploy any repo to Kubernetes",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 def _user_id_or_ip(request: Request) -> str:

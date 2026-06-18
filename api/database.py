@@ -102,3 +102,25 @@ def enforce_retention_policy():
         raise
     finally:
         conn.close()
+
+def init_db():
+    """Run schema.sql to ensure tables exist on startup."""
+    try:
+        schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
+        with open(schema_path, "r") as f:
+            schema_sql = f.read()
+            
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(schema_sql)
+            conn.commit()
+            logger.info("Database schema initialized successfully.")
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Failed to execute schema.sql: {e}")
+            raise
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.error(f"Failed to read/initialize database schema: {e}")
