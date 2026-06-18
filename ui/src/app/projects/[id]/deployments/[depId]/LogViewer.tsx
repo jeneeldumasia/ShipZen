@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Terminal, X, ExternalLink } from "lucide-react";
+import { api } from "@/lib/api";
 
 export function LogViewer({ projectId, deploymentId, buildId }: { projectId: string; deploymentId: string; buildId: string }) {
   const [open, setOpen] = useState(false);
@@ -14,8 +15,7 @@ export function LogViewer({ projectId, deploymentId, buildId }: { projectId: str
       setLoading(true);
       setLogs("");
       // Fetch the presigned URL
-      fetch(`/api/proxy/projects/${projectId}/deployments/${deploymentId}/builds/${buildId}/logs`)
-        .then(res => res.json())
+      api.builds.logs(projectId, deploymentId, buildId)
         .then(data => {
           if (data.url) {
             return fetch(data.url);

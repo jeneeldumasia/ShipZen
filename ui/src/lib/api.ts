@@ -138,6 +138,10 @@ export const api = {
       request<Build[]>(
         `/projects/${projectId}/deployments/${deploymentId}/builds`
       ),
+    logs: (projectId: string, deploymentId: string, buildId: string) =>
+      request<{ url: string }>(
+        `/projects/${projectId}/deployments/${deploymentId}/builds/${buildId}/logs`
+      ),
   },
 
   audit: {
