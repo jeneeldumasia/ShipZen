@@ -127,3 +127,31 @@ resource "kubernetes_secret" "ecr_config" {
 
   depends_on = [aws_ecr_repository.builds, module.eks, helm_release.postgresql]
 }
+
+# Duplicate DB credentials into the shipzen-build namespace for the builder pods
+resource "kubernetes_secret" "db_credentials_build" {
+  metadata {
+    name      = "shipzen-db-credentials"
+    namespace = "shipzen-build"
+  }
+
+  data = {
+    url = "postgresql://${local.pg_username}:${var.pg_password != "" ? var.pg_password : local.pg_password}@${local.pg_host}:${local.pg_port}/${local.pg_database}"
+  }
+
+  depends_on = [helm_release.postgresql, kubernetes_namespace.shipzen_build]
+}
+
+# Duplicate S3 config into the shipzen-build namespace for the builder pods
+resource "kubernetes_secret" "s3_config_build" {
+  metadata {
+    name      = "shipzen-s3-config"
+    namespace = "shipzen-build"
+  }
+
+  data = {
+    bucket_name = aws_s3_bucket.build_logs.id
+  }
+
+  depends_on = [aws_s3_bucket.build_logs, module.eks, kubernetes_namespace.shipzen_build]
+}
