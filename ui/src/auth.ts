@@ -1,5 +1,6 @@
 import NextAuth from "next-auth"
 import GitHubProvider from "next-auth/providers/github"
+import CredentialsProvider from "next-auth/providers/credentials"
 
 // Use GitHub if configured, otherwise use Stub Credentials
 const providers = []
