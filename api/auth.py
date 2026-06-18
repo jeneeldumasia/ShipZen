@@ -65,7 +65,9 @@ def get_current_user(
     # ── Local dev stub ────────────────────────────────────────────────────────
     if not AUTH0_DOMAIN:
         logger.warning("AUTH0_DOMAIN not set — using stub user for local dev")
-        return User(user_id="local-dev-user", is_admin=True)
+        from database import get_or_create_user
+        db_user = get_or_create_user("local-dev-user", "admin@shipzen.local")
+        return User(user_id=db_user["id"], is_admin=(db_user["role"] == "admin"))
 
     # ── Require Bearer token ──────────────────────────────────────────────────
     if credentials is None:
@@ -116,12 +118,11 @@ def get_current_user(
                 detail="Token missing sub claim",
             )
 
-        # Check for admin role in custom claim
-        # Set this up in Auth0 Actions: event.user.app_metadata.roles
-        roles = payload.get("https://shipzen.jeneeldumasia.codes/roles", [])
-        is_admin = "admin" in roles
+        from database import get_or_create_user
+        email = payload.get("email")
+        db_user = get_or_create_user(user_id, email)
 
-        return User(user_id=user_id, is_admin=is_admin)
+        return User(user_id=user_id, is_admin=(db_user["role"] == "admin"))
 
     except JWTError as e:
         raise HTTPException(

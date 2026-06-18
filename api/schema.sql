@@ -2,6 +2,14 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Users Table (RBAC)
+CREATE TABLE IF NOT EXISTS users (
+    id VARCHAR(255) PRIMARY KEY,
+    email VARCHAR(255),
+    role VARCHAR(50) NOT NULL DEFAULT 'user',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- Projects Table
 CREATE TABLE IF NOT EXISTS projects (
     id VARCHAR(255) PRIMARY KEY,

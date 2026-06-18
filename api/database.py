@@ -75,6 +75,35 @@ def get_deployments_paginated(project_id: str, limit: int = 20, cursor_updated_a
             return [dict(row) for row in cur.fetchall()]
 
 
+def get_or_create_user(user_id: str, email: str = None) -> dict:
+    """Gets a user by ID, or creates them. The first user created gets the 'admin' role."""
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=DictCursor) as cur:
+            cur.execute("SELECT id, role FROM users WHERE id = %s", (user_id,))
+            user = cur.fetchone()
+            if user:
+                return dict(user)
+            
+            cur.execute("SELECT COUNT(*) FROM users")
+            count = cur.fetchone()[0]
+            role = 'admin' if count == 0 else 'user'
+            
+            cur.execute(
+                "INSERT INTO users (id, email, role) VALUES (%s, %s, %s) RETURNING id, role",
+                (user_id, email, role)
+            )
+            new_user = cur.fetchone()
+            conn.commit()
+            return dict(new_user)
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Failed to get_or_create_user: {e}")
+        raise
+    finally:
+        conn.close()
+
+
 def enforce_retention_policy():
     """
     Retention Policy: delete failed builds older than 30 days,

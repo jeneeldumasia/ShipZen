@@ -882,6 +882,82 @@ async def github_webhook(request: Request, project_id: str):
     
     return {"message": "Deployment triggered", "deployment_id": deployment_id}
 
+# ── Users & Admin ─────────────────────────────────────────────────────────────
+
+@app.get("/users/me", tags=["Users"])
+@limiter.limit("100/minute")
+def get_me(request: Request, current_user: User = Depends(get_current_user)):
+    """Get the currently logged-in user's profile and role."""
+    return {"user_id": current_user.user_id, "is_admin": current_user.is_admin}
+
+
+class UpdateRoleRequest(BaseModel):
+    role: str
+
+@app.get("/admin/users", tags=["Admin"])
+@limiter.limit("100/minute")
+def list_users(request: Request, current_user: User = Depends(get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute("SELECT id, email, role, created_at FROM users ORDER BY created_at DESC;")
+                return [_serialize(dict(r)) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"Failed to list users: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+@app.put("/admin/users/{user_id}/role", tags=["Admin"])
+@limiter.limit("50/minute")
+def update_user_role(request: Request, user_id: str, body: UpdateRoleRequest, current_user: User = Depends(get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    if body.role not in ["admin", "user"]:
+        raise HTTPException(status_code=400, detail="Invalid role. Must be 'admin' or 'user'.")
+        
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE users SET role = %s WHERE id = %s RETURNING id;", (body.role, user_id))
+                if not cur.fetchone():
+                    raise HTTPException(status_code=404, detail="User not found")
+            conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update user role: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+        
+    log_audit_event(
+        project_id=None,
+        user_id=current_user.user_id,
+        action="UPDATE_ROLE",
+        resource_type="user",
+        resource_id=user_id,
+        details={"new_role": body.role},
+    )
+    return {"message": f"User {user_id} role updated to {body.role}"}
+
+
+@app.get("/admin/audit-logs", tags=["Admin"])
+@limiter.limit("100/minute")
+def list_global_audit_logs(request: Request, limit: int = Query(50, le=200), current_user: User = Depends(get_current_user)):
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT %s;",
+                    (limit,)
+                )
+                return [_serialize(dict(r)) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"Failed to fetch global audit logs: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _get_project_or_404(project_id: str, current_user: User) -> dict:

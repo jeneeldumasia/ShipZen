@@ -45,6 +45,24 @@ export function Sidebar({ user }: { user?: any }) {
             </Link>
           );
         })}
+
+        {user?.is_admin && (
+          <>
+            <p className="section-title mt-6 mb-2">Admin Console</p>
+            <Link href="/admin/projects" className={cn("nav-item", pathname.startsWith("/admin/projects") && "active")}>
+              <FolderGit2 size={16} className="flex-shrink-0" />
+              Global Projects
+            </Link>
+            <Link href="/admin/users" className={cn("nav-item", pathname.startsWith("/admin/users") && "active")}>
+              <Activity size={16} className="flex-shrink-0" />
+              User Management
+            </Link>
+            <Link href="/admin/audit" className={cn("nav-item", pathname.startsWith("/admin/audit") && "active")}>
+              <Zap size={16} className="flex-shrink-0" />
+              Global Audit Logs
+            </Link>
+          </>
+        )}
       </nav>
 
       {/* Bottom */}
