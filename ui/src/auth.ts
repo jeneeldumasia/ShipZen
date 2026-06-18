@@ -27,7 +27,7 @@ if (process.env.AUTH0_CLIENT_ID) {
       async authorize(credentials) {
         return {
           id: "local-dev-user",
-          name: credentials?.username || "Local Admin",
+          name: (credentials as any)?.username || "Local Admin",
           email: "admin@shipzen.local",
           image: "https://api.dicebear.com/7.x/avataaars/svg?seed=admin"
         }
