@@ -46,7 +46,7 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ steps.string.outputs.lowercase }}/shipzen-${{ matrix.component }}
           tags: |
-            type=sha,format=long
+            type=sha,format=short
             type=raw,value=latest
 
       - name: Build and push Docker image
