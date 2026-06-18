@@ -1,6 +1,6 @@
 provider "helm" {
   kubernetes {
-    host                   = join("", [module.eks.cluster_endpoint, time_sleep.wait_for_cluster_auth.id == "" ? "" : ""])
+    host                   = module.eks.cluster_endpoint
     cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
     
     exec {
@@ -17,7 +17,7 @@ resource "helm_release" "argocd" {
   chart            = "argo-cd"
   namespace        = "argocd"
   create_namespace = true
-  depends_on = [module.eks, helm_release.kube_prometheus_stack]
+  depends_on = [time_sleep.wait_for_cluster_auth, helm_release.kube_prometheus_stack]
 }
 
 resource "null_resource" "argocd_apps" {

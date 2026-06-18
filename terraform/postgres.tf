@@ -11,7 +11,7 @@ locals {
 # reach Running state after the addon API call returns.
 resource "time_sleep" "wait_for_ebs_csi" {
   create_duration = "45s"
-  depends_on      = [module.eks]
+  depends_on      = [time_sleep.wait_for_cluster_auth]
 }
 
 resource "helm_release" "postgresql" {
@@ -108,7 +108,7 @@ resource "kubernetes_secret" "s3_config" {
     bucket_name = aws_s3_bucket.build_logs.id
   }
 
-  depends_on = [aws_s3_bucket.build_logs, module.eks, helm_release.postgresql]
+  depends_on = [aws_s3_bucket.build_logs, time_sleep.wait_for_cluster_auth, helm_release.postgresql]
 }
 
 # ECR repo URL — mounted by API server and controller.
@@ -125,7 +125,7 @@ resource "kubernetes_secret" "ecr_config" {
     registry_hostname = split("/", aws_ecr_repository.builds.repository_url)[0]
   }
 
-  depends_on = [aws_ecr_repository.builds, module.eks, helm_release.postgresql]
+  depends_on = [aws_ecr_repository.builds, time_sleep.wait_for_cluster_auth, helm_release.postgresql]
 }
 
 # Duplicate DB credentials into the shipzen-build namespace for the builder pods
@@ -153,5 +153,5 @@ resource "kubernetes_secret" "s3_config_build" {
     bucket_name = aws_s3_bucket.build_logs.id
   }
 
-  depends_on = [aws_s3_bucket.build_logs, module.eks, kubernetes_namespace.shipzen_build]
+  depends_on = [aws_s3_bucket.build_logs, time_sleep.wait_for_cluster_auth, kubernetes_namespace.shipzen_build]
 }

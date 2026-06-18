@@ -11,7 +11,7 @@ resource "helm_release" "keda" {
   namespace        = "keda"
   create_namespace = true
 
-  depends_on = [module.eks, time_sleep.wait_for_alb_webhook]
+  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook]
 }
 
 # ── External Secrets Operator ────────────────────────────────────────────────
@@ -78,7 +78,7 @@ resource "helm_release" "external_secrets" {
   }
 
   # ESO depends on cert-manager being ready (it uses webhook TLS certs)
-  depends_on = [module.eks, helm_release.cert_manager]
+  depends_on = [time_sleep.wait_for_cluster_auth, helm_release.cert_manager]
 }
 
 # ── AWS Load Balancer Controller ─────────────────────────────────────────────
@@ -168,7 +168,7 @@ resource "helm_release" "aws_load_balancer_controller" {
     value = module.irsa_alb_controller.iam_role_arn
   }
 
-  depends_on = [module.eks, module.irsa_alb_controller, null_resource.gateway_api_crds]
+  depends_on = [time_sleep.wait_for_cluster_auth, module.irsa_alb_controller, null_resource.gateway_api_crds]
 }
 
 # ── Gateway API CRDs ─────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ resource "null_resource" "gateway_api_crds" {
   provisioner "local-exec" {
     command = "aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster && kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.0/standard-install.yaml"
   }
-  depends_on = [module.eks]
+  depends_on = [time_sleep.wait_for_cluster_auth]
 }
 
 # ── Envoy Gateway ────────────────────────────────────────────────────────────
@@ -192,7 +192,7 @@ resource "helm_release" "envoy_gateway" {
   namespace        = "envoy-gateway-system"
   create_namespace = true
 
-  depends_on = [module.eks, null_resource.gateway_api_crds, time_sleep.wait_for_alb_webhook]
+  depends_on = [time_sleep.wait_for_cluster_auth, null_resource.gateway_api_crds, time_sleep.wait_for_alb_webhook]
 }
 
 
@@ -286,7 +286,7 @@ resource "helm_release" "cert_manager" {
     value = "true"
   }
 
-  depends_on = [module.eks, time_sleep.wait_for_alb_webhook]
+  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook]
 }
 
 # ── Karpenter ────────────────────────────────────────────────────────────────
@@ -313,6 +313,6 @@ resource "helm_release" "karpenter" {
     value = module.karpenter.iam_role_arn
   }
 
-  depends_on = [module.eks, helm_release.aws_load_balancer_controller, time_sleep.wait_for_alb_webhook]
+  depends_on = [time_sleep.wait_for_cluster_auth, helm_release.aws_load_balancer_controller, time_sleep.wait_for_alb_webhook]
 }
 

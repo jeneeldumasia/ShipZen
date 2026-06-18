@@ -140,7 +140,7 @@ module "ebs_csi_irsa_role" {
 
 # Kubernetes provider — authenticated via EKS token
 provider "kubernetes" {
-  host                   = join("", [module.eks.cluster_endpoint, time_sleep.wait_for_cluster_auth.id == "" ? "" : ""])
+  host                   = module.eks.cluster_endpoint
   cluster_ca_certificate = base64decode(module.eks.cluster_certificate_authority_data)
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"

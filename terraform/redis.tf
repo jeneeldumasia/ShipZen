@@ -37,5 +37,5 @@ resource "helm_release" "redis" {
     value = "redis-master"
   }
 
-  depends_on = [module.eks, helm_release.kyverno]
+  depends_on = [time_sleep.wait_for_cluster_auth, helm_release.kyverno]
 }
