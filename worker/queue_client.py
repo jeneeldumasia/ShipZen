@@ -44,11 +44,13 @@ class QueueClient:
         start_id = '0-0'
         all_claimed = []
         while True:
-            next_start, claimed_messages = self.r.xautoclaim(
+            result = self.r.xautoclaim(
                 self.stream, self.group, self.consumer,
                 config.PENDING_MESSAGE_TIMEOUT_MS,
                 start_id=start_id, count=100
             )
+            next_start = result[0]
+            claimed_messages = result[1]
             for msg in claimed_messages:
                 # msg is typically [message_id, data]
                 message_id = msg[0]
