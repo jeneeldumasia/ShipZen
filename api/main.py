@@ -453,9 +453,6 @@ def list_deployments(
     params = [project_id]
 
     if cursor:
-from fastapi.responses import StreamingResponse
-import json
-{{ ... }}
         try:
             cursor_updated_at, cursor_deployment_id = cursor.split("|", 1)
             query += " AND (updated_at, deployment_id) < (%s, %s)"

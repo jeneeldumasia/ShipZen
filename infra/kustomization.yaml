@@ -36,9 +36,9 @@ images:
     newName: ghcr.io/jeneeldumasia/shipzen-worker
     newTag: sha-9363497
 
-
-
-
+  - name: shipzen-builder
+    newName: ghcr.io/jeneeldumasia/shipzen-builder
+    newTag: sha-9363497
 
 
   - name: shipzen-ui

@@ -1,3 +1,4 @@
+import redis
 import time
 import logging
 from config import config

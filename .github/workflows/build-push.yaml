@@ -22,7 +22,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        component: [api, ui, controller, worker]
+        component: [api, ui, controller, worker, builder]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
