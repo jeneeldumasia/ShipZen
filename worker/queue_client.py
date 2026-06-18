@@ -1,7 +1,7 @@
 import logging
 import redis
 from config import config
-from metrics import shipzen_queue_depth, shipzen_dlq_depth
+from metrics import shipzen_messages_in_flight, shipzen_dlq_depth
 
 logger = logging.getLogger(__name__)
 
@@ -40,26 +40,29 @@ class QueueClient:
         logger.warning(f"Message {message_id} moved to DLQ")
 
     def recover_pending_messages(self):
-        """Pending Message Recovery via XPENDING + XCLAIM."""
-        pending = self.r.xpending_range(self.stream, self.group, '-', '+', 100)
-        for msg in pending:
-            message_id = msg['message_id']
-            consumer = msg['consumer']
-            idle_time = msg['time_since_delivered']
-
-            if idle_time > config.PENDING_MESSAGE_TIMEOUT_MS:
-                logger.info(f"Recovering pending message {message_id} from {consumer}")
-                self.r.xclaim(
-                    self.stream, self.group, self.consumer,
-                    config.PENDING_MESSAGE_TIMEOUT_MS, [message_id]
-                )
+        """Pending Message Recovery via XAUTOCLAIM."""
+        start_id = '0-0'
+        while True:
+            next_start, claimed_messages = self.r.xautoclaim(
+                self.stream, self.group, self.consumer,
+                config.PENDING_MESSAGE_TIMEOUT_MS,
+                start_id=start_id, count=100
+            )
+            for msg in claimed_messages:
+                # msg is typically [message_id, data]
+                message_id = msg[0]
+                logger.info(f"Recovered pending message {message_id} via XAUTOCLAIM")
+                
+            if next_start == '0-0':
+                break
+            start_id = next_start
 
     def update_metrics(self):
         try:
             info = self.r.xinfo_groups(self.stream)
             for g in info:
                 if g['name'] == self.group:
-                    shipzen_queue_depth.set(g['pending'])
+                    shipzen_messages_in_flight.set(g['pending'])
             dlq_len = self.r.xlen(self.dlq_stream)
             shipzen_dlq_depth.set(dlq_len)
         except Exception:

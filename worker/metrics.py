@@ -1,9 +1,9 @@
 from prometheus_client import Gauge, Counter, Histogram, start_http_server
 
 # Metrics
-shipzen_queue_depth = Gauge(
-    'shipzen_queue_depth', 
-    'Current number of pending deployments in the queue'
+shipzen_messages_in_flight = Gauge(
+    'shipzen_messages_in_flight', 
+    'Current number of messages in flight (PEL) delivered to workers but unacknowledged'
 )
 
 shipzen_dlq_depth = Gauge(
