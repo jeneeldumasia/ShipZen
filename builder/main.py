@@ -173,6 +173,90 @@ def run_build(deployment_id: str, repo_url: str, branch: str, image_name: str):
             except Exception as e:
                 logger.warning(f"Failed to parse shipzen.yaml: {e}")
 
+        # === START AUTO-DETECT FOR FRONTEND SPAS ===
+        # Cloud Native Buildpacks (Paketo) requires a start script for Node.js apps.
+        # Vite/React SPAs often don't have one. We dynamically inject a pure-Node static server.
+        package_json_path = os.path.join(workspace, "package.json")
+        if os.path.exists(package_json_path):
+            try:
+                with open(package_json_path, 'r') as f:
+                    pj = json.load(f)
+                scripts = pj.get("scripts", {})
+                deps = pj.get("dependencies", {})
+                dev_deps = pj.get("devDependencies", {})
+                all_deps = {**deps, **dev_deps}
+                
+                frontend_markers = ["vite", "react-scripts", "vue", "astro", "gatsby", "svelte"]
+                
+                if "start" not in scripts:
+                    if "next" in all_deps:
+                        logger.info("Detected Next.js without start script. Injecting next start.")
+                        pj.setdefault("scripts", {})["start"] = "next start"
+                        with open(package_json_path, "w") as f:
+                            json.dump(pj, f, indent=2)
+                        if "build" in scripts:
+                            pack_args.extend(["--env", "BP_NODE_RUN_SCRIPTS=build"])
+                            
+                    elif any(m in all_deps for m in frontend_markers) or ("build" in scripts and "vite" in all_deps):
+                        logger.info("Detected static SPA without start script. Auto-configuring server.js...")
+                        
+                        if "build" in scripts:
+                            pack_args.extend(["--env", "BP_NODE_RUN_SCRIPTS=build"])
+                            
+                        server_js_path = os.path.join(workspace, "server.js")
+                        if not os.path.exists(server_js_path):
+                            with open(server_js_path, "w") as f:
+                                f.write("""const http = require('http');
+const fs = require('fs');
+const path = require('path');
+const PORT = process.env.PORT || 8080;
+const dirs = ['dist', 'build', 'out', 'public', '.'];
+let DIR = __dirname;
+for (const d of dirs) {
+    if (fs.existsSync(path.join(__dirname, d, 'index.html'))) {
+        DIR = path.join(__dirname, d);
+        break;
+    }
+}
+const mimeTypes = {
+    '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
+    '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpg',
+    '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.woff': 'application/font-woff',
+    '.woff2': 'application/font-woff2', '.ttf': 'application/font-ttf'
+};
+const server = http.createServer((req, res) => {
+    let reqUrl = req.url.split('?')[0];
+    let filePath = path.join(DIR, reqUrl === '/' ? 'index.html' : reqUrl);
+    let extname = path.extname(filePath);
+    if (!extname) {
+        filePath = path.join(DIR, 'index.html');
+        extname = '.html';
+    }
+    fs.readFile(filePath, (err, content) => {
+        if (err) {
+            if (err.code === 'ENOENT') {
+                fs.readFile(path.join(DIR, 'index.html'), (err2, content2) => {
+                    if (err2) { res.writeHead(500); res.end('Error'); }
+                    else { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end(content2, 'utf-8'); }
+                });
+            } else {
+                res.writeHead(500); res.end(`Server Error: ${err.code}`);
+            }
+        } else {
+            res.writeHead(200, { 'Content-Type': mimeTypes[extname] || 'application/octet-stream' });
+            res.end(content, 'utf-8');
+        }
+    });
+});
+server.listen(PORT, () => console.log(`Static server listening on port ${PORT} serving ${DIR}`));
+""")
+                            pj.setdefault("scripts", {})["start"] = "node server.js"
+                            with open(package_json_path, "w") as f:
+                                json.dump(pj, f, indent=2)
+            except Exception as e:
+                logger.warning(f"Error during static site auto-detection: {e}")
+        # === END AUTO-DETECT ===
+
         # Task 16 / fix #4.4: Kaniko removed entirely.
         # Kaniko requires filesystem overlay capabilities that are incompatible
         # with runAsNonRoot: true + all capabilities dropped. It would silently

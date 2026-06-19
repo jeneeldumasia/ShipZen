@@ -1,0 +1,6 @@
+# deployhub.yml — tells DeployHub which subdirectory to build
+# and how to run the container. No secrets here.
+buildContext: ui
+port: 3000
+healthPath: /
+startCommand: "node server.js"
