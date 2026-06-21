@@ -9,10 +9,17 @@ resource "helm_release" "kyverno" {
   namespace        = "kyverno"
   create_namespace = true
 
-  set {
-    name  = "installCRDs"
-    value = "true"
-  }
+  values = [
+    yamlencode({
+      installCRDs = true
+      config = {
+        resourceFiltersExcludeNamespaces = [
+          "observability",
+          "shipzen-build"
+        ]
+      }
+    })
+  ]
 
   depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook]
 }
