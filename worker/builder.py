@@ -177,9 +177,9 @@ fi
         if overrides.get("bp_node_run_scripts"):
             env_vars.append({"name": "BP_NODE_RUN_SCRIPTS", "value": overrides.get("bp_node_run_scripts")})
             
-        pack_args = "pack build " + image_uri + " --path /workspace --builder paketobuildpacks/builder-jammy-base --publish"
+        pack_args = ["pack", "build", image_uri, "--path", "/workspace", "--builder", "paketobuildpacks/builder-jammy-base", "--publish"]
         if overrides.get("runtime"):
-            pack_args += f" --buildpack {overrides.get('runtime')}"
+            pack_args.extend(["--buildpack", overrides.get("runtime")])
 
         return {
             "apiVersion": "batch/v1",
@@ -220,7 +220,7 @@ fi
                             {
                                 "name": "pack",
                                 "image": "buildpacksio/pack:0.33.2",
-                                "command": ["sh", "-c", pack_args],
+                                "command": pack_args,
                                 "env": env_vars,
                                 "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
                                 "securityContext": {
