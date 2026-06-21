@@ -6,6 +6,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { AutoRefresh } from "./AutoRefresh";
 import { RedeployButton } from "./RedeployButton";
 import { LogViewer } from "./LogViewer";
+import { auth } from "@/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -71,6 +72,9 @@ export default async function DeploymentPage({ params }: { params: { id: string;
   try { deployment = await api.deployments.get(params.id, params.depId); }
   catch { notFound(); }
 
+  const session = await auth();
+  const token = (session as any)?.accessToken;
+
   const [builds, auditLogs] = await Promise.allSettled([
     api.builds.list(params.id, params.depId),
     api.audit.list(params.id),
@@ -85,7 +89,7 @@ export default async function DeploymentPage({ params }: { params: { id: string;
 
   return (
     <div>
-      {isActive && <AutoRefresh projectId={params.id} deploymentId={params.depId} />}
+      {isActive && <AutoRefresh projectId={params.id} deploymentId={params.depId} token={token} />}
 
       <Link href={`/projects/${params.id}`} className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-gray-700 mb-6 group">
         <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
