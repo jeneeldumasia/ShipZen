@@ -1,118 +1,28 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 # Top-level kustomization for ArgoCD.
 # ArgoCD syncs path: infra which resolves to this file.
 # Every sub-directory that has a kustomization.yaml is listed here.
-
 resources:
   - system/
   - controller/
   - worker/
   - api/
-  - builder/
   - scale/
   - ui/
-
 images:
   - name: shipzen-api
     newName: ghcr.io/jeneeldumasia/shipzen-api
     newTag: sha-88e93b4
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   - name: shipzen-controller
     newName: ghcr.io/jeneeldumasia/shipzen-controller
     newTag: sha-88e93b4
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   - name: shipzen-worker
     newName: ghcr.io/jeneeldumasia/shipzen-worker
     newTag: sha-88e93b4
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
   - name: shipzen-builder
     newName: ghcr.io/jeneeldumasia/shipzen-builder
     newTag: sha-88e93b4
-
-
-
-
-
-
-
-
-
-
-
-
-
   - name: shipzen-ui
     newName: ghcr.io/jeneeldumasia/shipzen-ui
     newTag: sha-88e93b4
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
