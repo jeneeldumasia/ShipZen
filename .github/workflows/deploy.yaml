@@ -138,6 +138,10 @@ jobs:
             kubectl get gateway -A -o yaml || true
             kubectl get externalsecret -A -o yaml || true
             kubectl get secret shipzen-tls-cert -n shipzen-system || true
+            echo "--- DESCRIBING ARGOCD APP TO FIND SYNC ERRORS ---"
+            kubectl describe application shipzen-platform -n argocd || true
+            echo "--- DRY RUNNING KUSTOMIZE TO FIND VALIDATION ERRORS ---"
+            kubectl apply -k infra/system --dry-run=server || true
             kubectl get events -A --sort-by='.lastTimestamp' | tail -n 50 || true
             exit 1
           fi
