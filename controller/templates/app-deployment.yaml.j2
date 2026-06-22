@@ -101,7 +101,7 @@ spec:
     - name: shipzen-gateway
       namespace: shipzen-system
   hostnames:
-    - "{{ deployment_id[:8] }}.{{ project_name }}.shipzen.jeneeldumasia.codes"
+    - "{{ deployment_id[:8] }}-{{ project_name }}-shipzen.jeneeldumasia.codes"
   rules:
     - backendRefs:
         - name: {{ deployment_name }}-svc

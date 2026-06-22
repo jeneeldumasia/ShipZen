@@ -124,7 +124,7 @@ export default async function DeploymentPage({ params }: { params: { id: string;
         </div>
           <div className="flex items-center gap-2">
             <a
-              href={`https://grafana.shipzen.jeneeldumasia.codes/d/pod-health?orgId=1&var-namespace=tenant-${params.id}&var-deployment=${params.depId}`}
+              href={`https://grafana-shipzen.jeneeldumasia.codes/d/pod-health?orgId=1&var-namespace=tenant-${params.id}&var-deployment=${params.depId}`}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-secondary text-xs py-1.5 px-3"

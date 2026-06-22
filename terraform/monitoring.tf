@@ -46,12 +46,12 @@ resource "helm_release" "kube_prometheus_stack" {
 
   set {
     name  = "grafana.grafana\\.ini.server.domain"
-    value = "grafana.shipzen.jeneeldumasia.codes"
+    value = "grafana-shipzen.jeneeldumasia.codes"
   }
 
   set {
     name  = "grafana.grafana\\.ini.server.root_url"
-    value = "https://grafana.shipzen.jeneeldumasia.codes"
+    value = "https://grafana-shipzen.jeneeldumasia.codes"
   }
 
   set {

@@ -34,7 +34,7 @@ spec:
               protocol: TCP
           env:
             - name: NEXT_PUBLIC_API_URL
-              value: "https://api.shipzen.jeneeldumasia.codes"
+              value: "https://api-shipzen.jeneeldumasia.codes"
             - name: NEXT_PUBLIC_APP_DOMAIN
               value: "shipzen.jeneeldumasia.codes"
             - name: AUTH_TRUST_HOST

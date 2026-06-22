@@ -57,7 +57,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            NEXT_PUBLIC_API_URL=https://api.shipzen.jeneeldumasia.codes
+            NEXT_PUBLIC_API_URL=https://api-shipzen.jeneeldumasia.codes
 
       - name: Update Kustomization Tag and Commit
         run: |

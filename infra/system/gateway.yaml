@@ -71,7 +71,7 @@ spec:
       namespace: shipzen-system
       sectionName: http
   hostnames:
-    - "*.shipzen.jeneeldumasia.codes"
+    - "*.jeneeldumasia.codes"
     - "shipzen.jeneeldumasia.codes"
   rules:
     - filters:

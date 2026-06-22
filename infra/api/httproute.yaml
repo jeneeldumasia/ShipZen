@@ -9,7 +9,7 @@ spec:
       namespace: shipzen-system
       sectionName: https
   hostnames:
-    - "api.shipzen.jeneeldumasia.codes"
+    - "api-shipzen.jeneeldumasia.codes"
   rules:
     - matches:
         - path:

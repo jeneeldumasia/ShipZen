@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 export const metadata = { title: "Platform Health" };
 
 export default function ObservabilityPage() {
-  const grafanaUrl = "https://grafana.shipzen.jeneeldumasia.codes/d/platform-health?orgId=1&kiosk=tv";
+  const grafanaUrl = "https://grafana-shipzen.jeneeldumasia.codes/d/platform-health?orgId=1&kiosk=tv";
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
@@ -19,7 +19,7 @@ export default function ObservabilityPage() {
         description="Global observability and metrics"
         actions={
           <a
-            href="https://grafana.shipzen.jeneeldumasia.codes"
+            href="https://grafana-shipzen.jeneeldumasia.codes"
             target="_blank"
             rel="noopener noreferrer"
             className="btn-secondary"
