@@ -419,8 +419,10 @@ module "karpenter" {
   irsa_oidc_provider_arn = module.eks.oidc_provider_arn
   create_iam_role      = true
   iam_role_name        = "ShipZenKarpenterController"
+  iam_role_use_name_prefix = false
   create_node_iam_role = true
   node_iam_role_name   = "ShipZenKarpenterNodeRole"
+  node_iam_role_use_name_prefix = false
   create_access_entry  = true
   
   node_iam_role_additional_policies = {
