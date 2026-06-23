@@ -38,8 +38,26 @@ class DockerfileBuilder(Builder):
     def generate_job_manifest(self, deployment_id: str, repo_url: str, branch: str, image_uri: str, overrides: dict) -> Dict[str, Any]:
         token_resp, ecr_token = get_ecr_credentials()
         registry = image_uri.split('/')[0] if '/' in image_uri else ''
-        docker_config = f'{{"auths":{{"{registry}":{{"auth":"{token_resp}"}}}}}}'
-        
+        docker_config = json.dumps({"auths": {registry: {"auth": token_resp}}})
+
+        # Run buildkitd as a background process inside a single container, then invoke
+        # buildctl once the daemon is ready. Using the main container command (not a
+        # postStart lifecycle hook) ensures that a non-zero exit code fails the Job pod.
+        build_script = (
+            "set -e; "
+            "mkdir -p ~/.config/buildkit ~/.docker; "
+            f"echo '{docker_config}' > ~/.docker/config.json; "
+            "rootlesskit buildkitd --oci-worker-no-process-sandbox & "
+            "BKPID=$!; "
+            "for i in $(seq 1 30); do buildctl debug workers && break || sleep 1; done; "
+            f"buildctl build "
+            f"  --frontend dockerfile.v0 "
+            f"  --local context=/workspace "
+            f"  --local dockerfile=/workspace "
+            f"  --output type=image,name={image_uri},push=true; "
+            "EXIT=$?; kill $BKPID 2>/dev/null || true; exit $EXIT"
+        )
+
         return {
             "apiVersion": "batch/v1",
             "kind": "Job",
@@ -62,7 +80,6 @@ class DockerfileBuilder(Builder):
                     },
                     "spec": {
                         "restartPolicy": "Never",
-
                         "tolerations": [
                             {"key": "shipzen.jeneeldumasia.codes/dedicated", "operator": "Equal", "value": "builder", "effect": "NoSchedule"}
                         ],
@@ -87,21 +104,15 @@ class DockerfileBuilder(Builder):
                             {
                                 "name": "buildkit",
                                 "image": "moby/buildkit:master-rootless",
-                                "command": ["rootlesskit", "buildkitd"],
+                                # Run the daemon + build in the main process so the
+                                # container exit code reflects build success/failure.
+                                "command": ["sh", "-c", build_script],
                                 "securityContext": {
                                     "runAsUser": 1000,
                                     "runAsGroup": 1000,
                                     "seccompProfile": {"type": "Unconfined"}
                                 },
-                                "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
-                                # Instead of daemonizing and running buildctl in the same container, we can just run the daemon in the background and then run buildctl
-                                "lifecycle": {
-                                    "postStart": {
-                                        "exec": {
-                                            "command": ["sh", "-c", f"mkdir -p ~/.docker && echo '{docker_config}' > ~/.docker/config.json && while ! buildctl debug workers; do sleep 1; done; buildctl build --frontend dockerfile.v0 --local context=/workspace --local dockerfile=/workspace --output type=image,name={image_uri},push=true && kill 1"]
-                                        }
-                                    }
-                                }
+                                "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}]
                             }
                         ],
                         "volumes": [

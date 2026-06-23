@@ -47,11 +47,11 @@ data:
       "templating": {
         "list": [
           {"name": "namespace", "type": "query", "query": "label_values(kube_pod_info, namespace)"},
-          {"name": "deployment", "type": "query", "query": "label_values(kube_pod_info{namespace=\"$namespace\"}, created_by_name)"}
+          {"name": "deployment", "type": "query", "query": "label_values(kube_pod_info{namespace=\"$namespace\", created_by_kind=\"ReplicaSet\"}, created_by_name)"}
         ]
       },
       "panels": [
-        {"title": "Pod Ready Status", "type": "stat", "targets": [{"expr": "kube_pod_status_ready{namespace=\"$namespace\", pod=~\"$deployment-.*\"}"}]},
+        {"title": "Pod Ready Status", "type": "stat", "targets": [{"expr": "kube_pod_status_ready{namespace=\"$namespace\", pod=~\"$deployment-.*\", condition=\"true\"}"}]},
         {"title": "Restart Count", "type": "timeseries", "targets": [{"expr": "kube_pod_container_status_restarts_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}"}]},
         {"title": "CPU Usage", "type": "timeseries", "targets": [{"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=\"$namespace\", pod=~\"$deployment-.*\"}[5m])) by (pod)"}]},
         {"title": "Memory Usage", "type": "timeseries", "targets": [{"expr": "sum(container_memory_working_set_bytes{namespace=\"$namespace\", pod=~\"$deployment-.*\"}) by (pod)"}]}

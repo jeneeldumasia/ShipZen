@@ -48,6 +48,9 @@ def get_db_conn():
 
 def record_build(deployment_id: str, s3_key: str, status: str):
     build_id = str(uuid.uuid4())
+    if not S3_LOG_BUCKET:
+        logger.warning(f"S3_LOG_BUCKET not set — skipping build record for {deployment_id}")
+        return
     s3_uri = f"s3://{S3_LOG_BUCKET}/{s3_key}"
     try:
         conn = get_db_conn()
