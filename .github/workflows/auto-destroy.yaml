@@ -38,8 +38,18 @@ jobs:
             --query "cluster.createdAt" \
             --output text 2>/dev/null || echo "")
 
+          VPC_ID=$(aws ec2 describe-vpcs --filters "Name=tag:Name,Values=shipzen-vpc" --query "Vpcs[0].VpcId" --output text 2>/dev/null || echo "None")
+
+          if [ "$VPC_ID" != "None" ] && ([ -z "$CREATED_AT" ] || [ "$CREATED_AT" = "None" ]); then
+            echo "⚠️ Cluster is missing but VPC ($VPC_ID) still exists! This means a partial destroy occurred."
+            echo "Triggering auto-destroy to clean up lingering resources."
+            echo "should_destroy=true" >> $GITHUB_OUTPUT
+            echo "uptime_hours=0" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
           if [ -z "$CREATED_AT" ] || [ "$CREATED_AT" = "None" ]; then
-            echo "Cluster not found. Nothing to destroy."
+            echo "Cluster and VPC not found. Nothing to destroy."
             echo "should_destroy=false" >> $GITHUB_OUTPUT
             exit 0
           fi
