@@ -268,7 +268,27 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         
         if not selected_builder:
             raise Exception("No suitable builder found")
-            
+
+        # Ensure the per-project ECR repository exists before launching the build.
+        # ECR does not auto-create repos on push — pack's ANALYZING phase will fail
+        # with NAME_UNKNOWN if the repo doesn't exist.
+        # CreateRepository is idempotent: we catch RepositoryAlreadyExistsException.
+        try:
+            registry_and_repo = image_name.rsplit(":", 1)[0]   # strip the tag
+            repo_name = registry_and_repo.split("/", 1)[1]     # strip the registry hostname
+            ecr_client = boto3.client("ecr", region_name=os.getenv("AWS_REGION", "us-east-1"))
+            ecr_client.create_repository(
+                repositoryName=repo_name,
+                imageTagMutability="IMMUTABLE",
+                imageScanningConfiguration={"scanOnPush": True},
+            )
+            logger.info(f"Created ECR repository: {repo_name}")
+        except ecr_client.exceptions.RepositoryAlreadyExistsException:
+            pass  # Already exists — nothing to do
+        except Exception as e:
+            logger.warning(f"Could not ensure ECR repository exists: {e}")
+            # Non-fatal — the build may still succeed if the repo was created externally
+
         manifest = selected_builder.generate_job_manifest(deployment_id, repo_url, branch, image_name, overrides)
         job_name = manifest["metadata"]["name"]
         
