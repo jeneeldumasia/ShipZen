@@ -78,3 +78,15 @@ We will execute the `task.md` created this session:
 ---
 
 *Last updated: 2026-06-19. Finalized 3-Tier Ephemeral Builder architecture.*
+
+## Architectural Decisions This Session (June 23)
+- Fixed Karpenter EKS Pod Identity Webhook bug by hardcoding AWS_ROLE_ARN and projected volume tokens.
+- Addressed AWS Secrets Manager sync issues (fixed typos and created dummy secrets to unblock API startup).
+- Resolved ArgoCD delay issues by patching 	imeout.reconciliation to 10 seconds.
+- Identified Cloudflare Edge-to-Origin SSL mismatch: API subdomain was not covered by the Terraform-provisioned Origin CA cert. 
+- Implemented **Path-Based Routing** for the API (/api/v1/* -> shipzen-api) to reuse the UI's valid Cloudflare Edge SSL certificate.
+- Identified the Build failure: shipzen-worker requires the same Pod Identity hardcoding as Karpenter to authorize S3 PutObject for build logs.
+
+## Next Session (June 23 Continued)
+1. **Worker Pod Identity**: Patch infra/worker/deployment.yaml with explicit projected volume and AWS_ROLE_ARN for shipzen-worker so it can upload logs to S3.
+2. Verify Kaniko builds succeed and stream logs correctly.
