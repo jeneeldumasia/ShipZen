@@ -203,9 +203,21 @@ resource "aws_iam_role_policy" "builder_ecr" {
     Version = "2012-10-17"
     Statement = [
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
-      { Effect = "Allow", Action = ["ecr:BatchCheckLayerAvailability","ecr:PutImage",
-        "ecr:InitiateLayerUpload","ecr:UploadLayerPart","ecr:CompleteLayerUpload",
-        "ecr:DescribeImageScanFindings", "ecr:CreateRepository", "ecr:DescribeRepositories"],
+      { Effect = "Allow", Action = [
+          # Push
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          # Read (required by pack/buildpacks ANALYZING phase and crane)
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
+          # Management / scanning
+          "ecr:DescribeImageScanFindings",
+          "ecr:CreateRepository",
+          "ecr:DescribeRepositories"
+        ],
         Resource = [aws_ecr_repository.builds.arn, "${aws_ecr_repository.builds.arn}/*"] },
       { Effect = "Allow", Action = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
         Resource = [aws_s3_bucket.build_logs.arn, "${aws_s3_bucket.build_logs.arn}/*"] }
