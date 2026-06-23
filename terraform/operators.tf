@@ -298,6 +298,26 @@ resource "helm_release" "karpenter" {
     value = module.karpenter.iam_role_arn
   }
 
+  set {
+    name  = "controller.env[0].name"
+    value = "AWS_ROLE_ARN"
+  }
+
+  set {
+    name  = "controller.env[0].value"
+    value = module.karpenter.iam_role_arn
+  }
+
+  set {
+    name  = "controller.env[1].name"
+    value = "AWS_WEB_IDENTITY_TOKEN_FILE"
+  }
+
+  set {
+    name  = "controller.env[1].value"
+    value = "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
+  }
+
   depends_on = [time_sleep.wait_for_cluster_auth, helm_release.aws_load_balancer_controller, time_sleep.wait_for_alb_webhook]
 }
 

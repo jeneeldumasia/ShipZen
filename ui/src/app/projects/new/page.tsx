@@ -104,7 +104,7 @@ export default function NewProjectPage() {
 
           {/* Preview pill */}
           {namespace && (
-            <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs text-text-secondary">
+            <div className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-white/5 rounded-lg border border-slate-200 dark:border-white/10 text-xs text-text-secondary">
               <span className="text-text-secondary">Namespace:</span>
               <code className="font-mono text-brand font-medium">{namespace}</code>
             </div>
