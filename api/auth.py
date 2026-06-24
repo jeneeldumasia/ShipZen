@@ -1,5 +1,6 @@
 import os
 import logging
+import hashlib
 from dataclasses import dataclass
 from typing import Optional
 
@@ -43,9 +44,12 @@ def get_current_user(
 
     token = credentials.credentials
 
+    # Fix 12: Token cache key is the raw bearer token, hash it
+    cache_key = hashlib.sha256(token.encode()).hexdigest()
+
     # Check cache
-    if token in _token_cache:
-        user_info = _token_cache[token]
+    if cache_key in _token_cache:
+        user_info = _token_cache[cache_key]
     else:
         # Verify token with GitHub
         try:
@@ -79,7 +83,7 @@ def get_current_user(
                 "login": gh_user["login"],
                 "email": email or gh_user.get("email")
             }
-            _token_cache[token] = user_info
+            _token_cache[cache_key] = user_info
         except httpx.RequestError as e:
             logger.error(f"GitHub API request failed: {e}")
             raise HTTPException(status_code=503, detail="Auth service unavailable")

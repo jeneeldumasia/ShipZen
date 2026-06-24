@@ -132,9 +132,10 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
         if job_succeeded:
             logger.info(f"Build {deployment_id} successful. Checking port/ECR...")
             
+            # Fix 7: ecr variable used out of scope, move to before crane block
+            ecr = boto3.client('ecr', region_name=os.getenv("AWS_REGION", "us-east-1"))
             # Dynamic Port Detection via Crane
             try:
-                ecr = boto3.client('ecr', region_name=os.getenv("AWS_REGION", "us-east-1"))
                 auth_data = ecr.get_authorization_token()['authorizationData'][0]
                 token = base64.b64decode(auth_data['authorizationToken']).decode('utf-8')
                 username, password = token.split(':')
@@ -150,7 +151,7 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
                     conn = get_db_conn()
                     with conn.cursor() as cur:
                         cur.execute("UPDATE deployments SET port = %s WHERE deployment_id = %s;", (int(first_port), deployment_id))
-                    conn.commit()
+                    # Fix 10: autocommit=True: no explicit commit needed
                     conn.close()
             except Exception as e:
                 logger.warning(f"Failed to extract exposed port: {e}")
@@ -214,13 +215,22 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         queue.ack_message(message_id)
         return
 
+    # Fix 1: Skip building if this is a rollback, just advance state
+    if data.get("is_rollback") == "true":
+        logger.info(f"Deployment {deployment_id} is a rollback, skipping build.")
+        state_machine.update_state(deployment_id, "Deploying")
+        queue.ack_message(message_id)
+        return
+
     logger.info(f"Processing deployment {deployment_id}")
     
+    # Fix 8: Workspace directory leaks on clone failure, moved creation inside try and cleanup to finally
+    workspace = f"/tmp/workspace_{deployment_id}"
     try:
         # Shallow clone to detect builder
-        workspace = f"/tmp/workspace_{deployment_id}"
         os.makedirs(workspace, exist_ok=True)
-        subprocess.run(["git", "clone", "--depth=1", "--branch", branch, repo_url, workspace], check=True)
+        # Fix 9: Git clone in worker has no timeout
+        subprocess.run(["git", "clone", "--depth=1", "--branch", branch, repo_url, workspace], check=True, timeout=120)
         
         # Check overrides
         overrides = {}
@@ -263,8 +273,6 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
             if b.detect(workspace):
                 selected_builder = b
                 break
-
-        shutil.rmtree(workspace, ignore_errors=True)
         
         if not selected_builder:
             raise Exception("No suitable builder found")
@@ -312,6 +320,8 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         # generic "Build step failed." message
         state_machine.update_state(deployment_id, "Failed", str(e))
         queue.add_to_dlq(message_id, data)
+    finally:
+        shutil.rmtree(workspace, ignore_errors=True)
 
 
 def main():

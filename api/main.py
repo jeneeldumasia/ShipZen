@@ -87,7 +87,8 @@ def _user_id_or_ip(request: Request) -> str:
             # For rate limiting, it's cheaper to just decode without full validation
             payload = jwt.decode(token, options={"verify_signature": False})
             if "sub" in payload:
-                return payload["sub"]
+                # Fix 5: Hash token instead of unverified JWT decode for rate limit key
+                return hashlib.sha256(token.encode()).hexdigest()[:32]
         except Exception:
             pass
     return get_remote_address(request)
@@ -272,19 +273,23 @@ def analyze_repo(request: Request, body: AnalyzeRequest, current_user: User = De
     import subprocess
     from analyzer import RepoAnalyzer
     
-    with tempfile.TemporaryDirectory() as tmpdir:
-        try:
-            # Shallow clone
+    # Fix 4: Validate branch name to prevent shell injection
+    if not re.match(r'^[a-zA-Z0-9_.-]{1,100}$', body.branch):
+        raise HTTPException(status_code=400, detail="Invalid branch name")
+        
+    try:
+        # Fix 4: Move TemporaryDirectory inside try
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Fix 4: timeout=60, capture_output=True
             subprocess.run(
                 ["git", "clone", "--depth", "1", "-b", body.branch, body.repo_url, tmpdir],
-                check=True, capture_output=True, timeout=30
+                check=True, capture_output=True, timeout=60
             )
-        except Exception as e:
-            logger.error(f"Failed to clone repo for analysis: {e}")
-            raise HTTPException(status_code=400, detail="Failed to clone repository")
-            
-        analyzer = RepoAnalyzer(repo_path=tmpdir, repo_name=body.repo_url.split('/')[-1].replace('.git', ''))
-        services = analyzer.analyze()
+            analyzer = RepoAnalyzer(repo_path=tmpdir, repo_name=body.repo_url.split('/')[-1].replace('.git', ''))
+            services = analyzer.analyze()
+    except Exception as e:
+        logger.error(f"Failed to clone repo for analysis: {e}")
+        raise HTTPException(status_code=400, detail="Failed to clone repository")
         
     return {"services": [s.__dict__ for s in services]}
 
@@ -403,7 +408,7 @@ def rollback_deployment(request: Request, project_id: str, current_user: User = 
             cur.execute("""
                 INSERT INTO deployments
                     (deployment_id, project_id, repo_url, image_uri, replicas, port, state)
-                VALUES (%s, %s, %s, %s, %s, %s, 'Deploying')
+                VALUES (%s, %s, %s, %s, %s, %s, 'Queued')
                 RETURNING *;
             """, (
                 deployment_id, project_id, last_good['repo_url'], 
@@ -415,7 +420,18 @@ def rollback_deployment(request: Request, project_id: str, current_user: User = 
     # Publish state update to Redis
     try:
         r = get_redis()
-        r.publish(f"shipzen:status:{deployment_id}", json.dumps({"state": "Deploying", "last_error": None}))
+        # Fix 1: Insert state as Queued, and queue to worker stream
+        r.xadd(STREAM_NAME, {
+            "deployment_id": deployment_id,
+            "project_id":    project_id,
+            "repo_url":      last_good['repo_url'],
+            "branch":        "main",
+            "image_name":    last_good['image_uri'],
+            "queued_at":     str(time.time()),
+            "retries":       "0",
+            "is_rollback":   "true",
+        })
+        r.publish(f"shipzen:status:{deployment_id}", json.dumps({"state": "Queued", "last_error": None}))
     except Exception as e:
         logger.warning(f"Failed to publish status to Redis: {e}")
         
@@ -753,7 +769,8 @@ def get_global_audit_logs(
 @limiter.limit("100/minute")
 def get_env_vars(request: Request, project_id: str, current_user: User = Depends(get_current_user)):
     project = _get_project_or_404(project_id, current_user)
-    secret_id = f"shipzen/{project['name']}/"
+    # Fix 6: Use project['id'] instead of name to avoid collision
+    secret_id = f"shipzen/project/{project['id']}"
     sm = boto3.client('secretsmanager')
     try:
         # We only return the keys, not the values for security
@@ -777,7 +794,8 @@ def put_env_var(request: Request, project_id: str, body: dict, current_user: Use
     if not key or not value:
         raise HTTPException(status_code=400, detail="Missing key or value")
         
-    secret_id = f"shipzen/{project['name']}/"
+    # Fix 6: Use project['id'] instead of name to avoid collision
+    secret_id = f"shipzen/project/{project['id']}"
     sm = boto3.client('secretsmanager')
     import json
     
@@ -812,7 +830,8 @@ def put_env_var(request: Request, project_id: str, body: dict, current_user: Use
 @limiter.limit("20/minute")
 def delete_env_var(request: Request, project_id: str, key: str, current_user: User = Depends(get_current_user)):
     project = _get_project_or_404(project_id, current_user)
-    secret_id = f"shipzen/{project['name']}/"
+    # Fix 6: Use project['id'] instead of name to avoid collision
+    secret_id = f"shipzen/project/{project['id']}"
     sm = boto3.client('secretsmanager')
     import json
     
@@ -847,6 +866,10 @@ async def github_webhook(request: Request, project_id: str):
     signature_header = request.headers.get("x-hub-signature-256")
     if not signature_header:
         raise HTTPException(status_code=400, detail="Missing signature")
+        
+    # Fix 2: Only trigger on push events
+    if request.headers.get("X-GitHub-Event") != "push":
+        return JSONResponse(status_code=200, content={"message": "event ignored"})
         
     try:
         with get_connection() as conn:
@@ -918,7 +941,12 @@ async def github_webhook(request: Request, project_id: str):
                     (deployment_id, project_id, repo_url, image_uri, 1, port)
                 )
             conn.commit()
-            
+    except Exception as e:
+        logger.error(f"Failed to process webhook DB insert for {project_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process webhook")
+
+    # Fix 3: Separate XADD to handle stream failures without swallowing
+    try:
         r = get_redis()
         r.xadd(STREAM_NAME, {
             "deployment_id": deployment_id,
@@ -930,8 +958,18 @@ async def github_webhook(request: Request, project_id: str):
             "retries":       "0",
         })
     except Exception as e:
-        logger.error(f"Failed to process webhook for {project_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to process webhook")
+        logger.error(f"Failed to enqueue webhook deployment {deployment_id}: {e}")
+        try:
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "UPDATE deployments SET state = 'Failed', last_error = %s WHERE deployment_id = %s;",
+                        ("Failed to enqueue to stream", deployment_id),
+                    )
+                conn.commit()
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail="Failed to enqueue webhook deployment")
         
     log_audit_event(
         project_id=project_id,

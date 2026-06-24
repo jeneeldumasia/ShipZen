@@ -77,6 +77,7 @@ def get_deployments_paginated(project_id: str, limit: int = 20, cursor_updated_a
 
 def get_or_create_user(user_id: str, email: str = None) -> dict:
     """Gets a user by ID, or creates them. The first user created gets the 'admin' role."""
+    import psycopg2
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=DictCursor) as cur:
@@ -89,13 +90,19 @@ def get_or_create_user(user_id: str, email: str = None) -> dict:
             count = cur.fetchone()[0]
             role = 'admin' if count == 0 else 'user'
             
-            cur.execute(
-                "INSERT INTO users (id, email, role) VALUES (%s, %s, %s) RETURNING id, role",
-                (user_id, email, role)
-            )
-            new_user = cur.fetchone()
-            conn.commit()
-            return dict(new_user)
+            # Fix 11: get_or_create_user has a TOCTOU race condition
+            try:
+                cur.execute(
+                    "INSERT INTO users (id, email, role) VALUES (%s, %s, %s) RETURNING id, role",
+                    (user_id, email, role)
+                )
+                new_user = cur.fetchone()
+                conn.commit()
+                return dict(new_user)
+            except psycopg2.errors.UniqueViolation:
+                conn.rollback()
+                cur.execute("SELECT id, role FROM users WHERE id = %s", (user_id,))
+                return dict(cur.fetchone())
     except Exception as e:
         conn.rollback()
         logger.error(f"Failed to get_or_create_user: {e}")
