@@ -274,12 +274,28 @@ def reconcile_deployments(conn, cur, project):
         k8s_deps = k8s_apps_api.list_namespaced_deployment(namespace=project.namespace)
         k8s_dep_names = {d.metadata.name: d for d in k8s_deps.items}
 
+        k8s_svcs = k8s_core_api.list_namespaced_service(namespace=project.namespace)
+        k8s_svc_names = {s.metadata.name for s in k8s_svcs.items}
+        
+        try:
+            k8s_routes = k8s_custom_api.list_namespaced_custom_object(
+                "gateway.networking.k8s.io", "v1", namespace=project.namespace, plural="httproutes"
+            )
+            k8s_route_names = {r['metadata']['name'] for r in k8s_routes.get('items', [])}
+        except ApiException:
+            k8s_route_names = set()
+
         # 1. Missing or Drifted Deployments
         for d_id, db_dep in db_deployments.items():
             if db_dep['state'] in ['Running', 'Verifying', 'Deploying']:
-                if d_id not in k8s_dep_names:
+                missing_resources = (
+                    d_id not in k8s_dep_names or
+                    f"{d_id}-svc" not in k8s_svc_names or
+                    f"{d_id}-route" not in k8s_route_names
+                )
+                if missing_resources:
                     shipzen_drift_total.inc()
-                    logger.warning(f"Drift: Deployment {d_id} missing in K8s. Recreating...")
+                    logger.warning(f"Drift: Deployment {d_id} or its resources missing in K8s. Recreating...")
                     template = jinja_env.get_template("app-deployment.yaml.j2")
                     manifests = template.render(
                         deployment_name=d_id,
