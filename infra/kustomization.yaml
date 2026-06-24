@@ -13,7 +13,8 @@ resources:
 images:
   - name: shipzen-api
     newName: ghcr.io/jeneeldumasia/shipzen-api
-    newTag: sha-e8ea0e2
+    newTag: sha-ffe10cd
+
 
 
 
@@ -41,7 +42,8 @@ images:
 
   - name: shipzen-controller
     newName: ghcr.io/jeneeldumasia/shipzen-controller
-    newTag: sha-e8ea0e2
+    newTag: sha-ffe10cd
+
 
 
 
@@ -69,7 +71,8 @@ images:
 
   - name: shipzen-worker
     newName: ghcr.io/jeneeldumasia/shipzen-worker
-    newTag: sha-e8ea0e2
+    newTag: sha-ffe10cd
+
 
 
 
@@ -100,7 +103,8 @@ images:
     newTag: sha-88e93b4
   - name: shipzen-ui
     newName: ghcr.io/jeneeldumasia/shipzen-ui
-    newTag: sha-e8ea0e2
+    newTag: sha-ffe10cd
+
 
 
 
