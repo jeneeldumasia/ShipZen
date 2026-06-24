@@ -151,7 +151,7 @@ cd /workspace
 """
         if overrides.get("inject_server_js"):
             setup_script += """
-cat << 'EOF' > server.js
+cat << 'EOF' > server.cjs
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -198,7 +198,7 @@ server.listen(PORT, () => console.log(`Static server listening on port ${PORT} s
 EOF
 # Inject start script
 if [ -f package.json ]; then
-  sed -i 's/"scripts": {/"scripts": { "start": "node server.js",/' package.json
+  sed -i 's/"scripts": {/"scripts": { "start": "node server.cjs",/' package.json
 fi
 """
 
