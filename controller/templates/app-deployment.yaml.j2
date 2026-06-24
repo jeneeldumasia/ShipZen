@@ -52,10 +52,19 @@ spec:
       # The ecr-pull-secret is created per-namespace by the controller when
       # provisioning the tenant namespace (via a Kubernetes Job that runs
       # `aws ecr get-login-password` and creates the secret).
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       imagePullSecrets:
         - name: ecr-pull-secret
       containers:
         - name: app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           image: {{ image_uri }}
           env:
             - name: PORT
