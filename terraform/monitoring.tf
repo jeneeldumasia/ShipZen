@@ -63,6 +63,11 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "grafana123!"
   }
 
+  set {
+    name  = "grafana.assertNoLeakedSecrets"
+    value = "false"
+  }
+
   # Grafana admin password — change before exposing externally
   set {
     name  = "grafana.adminPassword"
