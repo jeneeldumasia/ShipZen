@@ -27,11 +27,7 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "false"
   }
 
-  # Disable persistence (cost)
-  set {
-    name  = "prometheus.prometheusSpec.storageSpec"
-    value = ""
-  }
+  # Disable persistence (cost) - omitted storageSpec to default to emptyDir
 
   set {
     name  = "grafana.persistence.enabled"
@@ -58,9 +54,15 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "shipzen"
   }
 
+  # Use env var for password to avoid .ini parser breaking on special characters like # or ;
   set {
-    name  = "grafana.grafana\\.ini.database.password"
+    name  = "grafana.env.GF_DATABASE_PASSWORD"
     value = var.pg_password != "" ? var.pg_password : "shipzen-secret-change-me"
+  }
+
+  set {
+    name  = "grafana.grafana\\.ini.database.ssl_mode"
+    value = "disable"
   }
 
   set {
