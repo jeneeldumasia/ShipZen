@@ -418,6 +418,59 @@ def analyze_repo(request: Request, body: AnalyzeRequest, current_user: User = De
         
     return {"services": [s.__dict__ for s in services]}
 
+@app.get("/github/branches", tags=["GitHub"])
+@limiter.limit("30/minute")
+def get_github_branches(
+    request: Request,
+    repo_url: str,
+    current_user: User = Depends(get_current_user)
+):
+    import httpx
+    import re
+    
+    match = re.match(r'^https://github\.com/([^/]+)/([^/]+?)(?:\.git)?$', repo_url)
+    if not match:
+        return JSONResponse(status_code=400, content={"error": "Only GitHub repositories are supported"})
+        
+    owner, repo = match.groups()
+    
+    headers = {"Accept": "application/vnd.github+json"}
+    auth_header = request.headers.get("Authorization")
+    if auth_header:
+        headers["Authorization"] = auth_header
+        
+    branches = []
+    
+    with httpx.Client(timeout=5) as client:
+        for page in range(1, 4):
+            url = f"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100&page={page}"
+            
+            resp = client.get(url, headers=headers)
+            
+            # Fallback to unauthenticated on 401/403 for public repos
+            if resp.status_code in (401, 403) and "Authorization" in headers:
+                del headers["Authorization"]
+                resp = client.get(url, headers=headers)
+                
+            if resp.status_code == 404:
+                return JSONResponse(
+                    status_code=404, 
+                    content={"error": "Repository not found or private — check the URL and your GitHub permissions"}
+                )
+            elif resp.status_code != 200:
+                return JSONResponse(status_code=502, content={"error": "Failed to fetch branches from GitHub"})
+                
+            page_data = resp.json()
+            if not page_data:
+                break
+                
+            branches.extend([b["name"] for b in page_data])
+            
+            if len(page_data) < 100:
+                break
+
+    return {"branches": branches, "total": len(branches)}
+
 # ── Deployments ───────────────────────────────────────────────────────────────
 
 @app.post("/projects/{project_id}/deployments", status_code=202, tags=["Deployments"])

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2, ChevronDown, ChevronUp, Globe, GitBranch, Rocket, Settings2 } from "lucide-react";
@@ -17,6 +17,45 @@ export default function NewDeploymentPage() {
   const [port, setPort]                 = useState(8080);
   const [error, setError]               = useState("");
   const [loading, setLoading]           = useState(false);
+
+  // New states for branch fetching
+  const [branches, setBranches]               = useState<string[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [branchError, setBranchError]         = useState<string | null>(null);
+  const [totalBranches, setTotalBranches]     = useState(0);
+
+  // Debounced branch fetch
+  useEffect(() => {
+    // Reset states on change
+    setBranches([]);
+    setBranchError(null);
+    setLoadingBranches(false);
+    setTotalBranches(0);
+
+    if (!repoUrl.includes("github.com")) {
+      return;
+    }
+
+    setLoadingBranches(true);
+    const timer = setTimeout(async () => {
+      try {
+        const data = await api.github.branches(repoUrl);
+        setBranches(data.branches);
+        setTotalBranches(data.total);
+        if (data.branches.includes("main")) {
+          setBranch("main");
+        } else if (data.branches.length > 0) {
+          setBranch(data.branches[0]);
+        }
+      } catch (err: any) {
+        setBranchError(err.message || "Failed to load branches");
+      } finally {
+        setLoadingBranches(false);
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [repoUrl]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +76,7 @@ export default function NewDeploymentPage() {
 
   return (
     <div className="max-w-xl">
-      <Link href={`/projects/${projectId}`} className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-gray-700 mb-7 group">
+      <Link href={`/projects/${projectId}`} className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary mb-7 group">
         <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
         Back to Project
       </Link>
@@ -62,7 +101,7 @@ export default function NewDeploymentPage() {
 
         {/* Repo URL */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Repository URL</label>
+          <label className="block text-sm font-medium text-text-primary mb-1.5">Repository URL</label>
           <div className="relative">
             <Globe size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
             <input
@@ -82,17 +121,42 @@ export default function NewDeploymentPage() {
 
         {/* Branch */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">Branch</label>
+          <label className="block text-sm font-medium text-text-primary mb-1.5">Branch</label>
           <div className="relative">
-            <GitBranch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
-            <input
-              className="input pl-9 font-mono"
-              type="text"
-              value={branch}
-              onChange={e => setBranch(e.target.value)}
-              placeholder="main"
-            />
+            {loadingBranches ? (
+              <Loader2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary animate-spin" />
+            ) : (
+              <GitBranch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary pointer-events-none" />
+            )}
+            
+            {branches.length > 0 && !branchError ? (
+              <select
+                className="input pl-9 font-mono appearance-none"
+                value={branch}
+                onChange={e => setBranch(e.target.value)}
+                disabled={loadingBranches}
+              >
+                {branches.map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            ) : (
+              <input
+                className="input pl-9 font-mono"
+                type="text"
+                value={branch}
+                onChange={e => setBranch(e.target.value)}
+                placeholder="main"
+                disabled={loadingBranches}
+              />
+            )}
           </div>
+          {repoUrl && !loadingBranches && branches.length === 0 && (
+            <p className="text-xs text-text-secondary mt-1.5">Enter branch name manually</p>
+          )}
+          {totalBranches >= 300 && (
+            <p className="text-xs text-text-secondary mt-1.5">Showing first 300 branches</p>
+          )}
         </div>
 
         {/* Advanced */}
@@ -100,7 +164,7 @@ export default function NewDeploymentPage() {
           <button
             type="button"
             onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-gray-700 font-medium"
+            className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text-primary font-medium"
           >
             <Settings2 size={13} />
             Advanced options
@@ -110,7 +174,7 @@ export default function NewDeploymentPage() {
           {showAdvanced && (
             <div className="mt-4 pt-4 border-t border-slate-100 space-y-4 animate-fade-in">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">Container Port</label>
+                <label className="block text-sm font-medium text-text-primary mb-1.5">Container Port</label>
                 <input
                   type="number"
                   min={1}

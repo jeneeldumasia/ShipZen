@@ -111,6 +111,13 @@ export interface AuditLog {
 // ── Projects ──────────────────────────────────────────────────────────────────
 
 export const api = {
+  github: {
+    branches: (repoUrl: string) =>
+      request<{ branches: string[]; total: number }>(
+        `/github/branches?repo_url=${encodeURIComponent(repoUrl)}`
+      ),
+  },
+
   projects: {
     list: () => request<Project[]>("/projects"),
     get: (id: string) => request<Project>(`/projects/${id}`),
