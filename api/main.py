@@ -419,59 +419,6 @@ def analyze_repo(request: Request, body: AnalyzeRequest, current_user: User = De
         
     return {"services": [s.__dict__ for s in services]}
 
-@app.get("/github/branches", tags=["GitHub"])
-@limiter.limit("30/minute")
-def get_github_branches(
-    request: Request,
-    repo_url: str,
-    current_user: User = Depends(get_current_user)
-):
-    import httpx
-    import re
-    
-    match = re.match(r'^https://github\.com/([^/]+)/([^/]+?)(?:\.git)?$', repo_url)
-    if not match:
-        return JSONResponse(status_code=400, content={"error": "Only GitHub repositories are supported"})
-        
-    owner, repo = match.groups()
-    
-    headers = {"Accept": "application/vnd.github+json"}
-    auth_header = request.headers.get("Authorization")
-    if auth_header:
-        headers["Authorization"] = auth_header
-        
-    branches = []
-    
-    with httpx.Client(timeout=5) as client:
-        for page in range(1, 4):
-            url = f"https://api.github.com/repos/{owner}/{repo}/branches?per_page=100&page={page}"
-            
-            resp = client.get(url, headers=headers)
-            
-            # Fallback to unauthenticated on 401/403 for public repos
-            if resp.status_code in (401, 403) and "Authorization" in headers:
-                del headers["Authorization"]
-                resp = client.get(url, headers=headers)
-                
-            if resp.status_code == 404:
-                return JSONResponse(
-                    status_code=404, 
-                    content={"error": "Repository not found or private — check the URL and your GitHub permissions"}
-                )
-            elif resp.status_code != 200:
-                return JSONResponse(status_code=502, content={"error": "Failed to fetch branches from GitHub"})
-                
-            page_data = resp.json()
-            if not page_data:
-                break
-                
-            branches.extend([b["name"] for b in page_data])
-            
-            if len(page_data) < 100:
-                break
-
-    return {"branches": branches, "total": len(branches)}
-
 # ── Deployments ───────────────────────────────────────────────────────────────
 
 @app.post("/projects/{project_id}/deployments", status_code=202, tags=["Deployments"])
@@ -591,7 +538,7 @@ def rollback_deployment(request: Request, project_id: str, project: dict = Depen
                 deployment_id, project_id, last_good['repo_url'], 
                 last_good['image_uri'], last_good['replicas'], last_good['port']
             ))
-            new_dep = dict(cur.fetchone())
+            cur.fetchone()
         conn.commit()
         
     # Publish state update to Redis
@@ -679,7 +626,7 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
         return
     from auth import get_current_user_from_token
     try:
-        user = get_current_user_from_token(token)
+        get_current_user_from_token(token)
     except Exception:
         await websocket.close(code=1008)
         return
@@ -954,7 +901,7 @@ def get_env_vars(request: Request, project_id: str, project: dict = Depends(veri
 
 @app.put("/projects/{project_id}/env", tags=["Environment"])
 @limiter.limit("20/minute")
-def put_env_var(request: Request, project_id: str, body: dict, project: dict = Depends(verify_project_access)):
+def put_env_var(request: Request, project_id: str, body: dict, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
     """Expected body: {"key": "API_KEY", "value": "secret123"}"""
     key = body.get("key")
     value = body.get("value")

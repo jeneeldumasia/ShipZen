@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
-import { FolderGit2, Plus, Rocket, RefreshCw, Terminal, X } from "lucide-react";
+import { FolderGit2, Plus, Terminal, X } from "lucide-react";
 import { api, Project } from "@/lib/api";
 
 export function CommandPalette() {

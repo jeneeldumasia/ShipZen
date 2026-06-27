@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Lock, Plus, Trash2, Key, RefreshCw } from "lucide-react";
+import { Lock, Plus, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 
@@ -37,7 +37,7 @@ export function EnvVars({ projectId }: { projectId: string }) {
       setNewVal("");
       await loadKeys();
       toast.success("Environment variable saved");
-    } catch (e) {
+    } catch {
       toast.error("Failed to save environment variable");
     } finally {
       setSaving(false);
@@ -50,7 +50,7 @@ export function EnvVars({ projectId }: { projectId: string }) {
       await api.env.delete(projectId, key);
       await loadKeys();
       toast.success("Environment variable deleted");
-    } catch (e) {
+    } catch {
       toast.error("Failed to delete environment variable");
     }
   }

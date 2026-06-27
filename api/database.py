@@ -79,7 +79,6 @@ def get_deployments_paginated(project_id: str, limit: int = 20, cursor_updated_a
 
 def get_or_create_user(user_id: str, email: str = None) -> dict:
     """Gets a user by ID, or creates them. The first user created gets the 'admin' role."""
-    import psycopg2
     conn = get_connection()
     try:
         with conn.cursor(cursor_factory=DictCursor) as cur:
