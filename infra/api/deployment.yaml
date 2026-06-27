@@ -60,6 +60,12 @@ spec:
                   name: shipzen-github
                   key: enabled
                   optional: true
+            - name: GITHUB_APP_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: shipzen-github
+                  key: app_webhook_secret
+                  optional: true
           resources:
             requests:
               cpu: "100m"

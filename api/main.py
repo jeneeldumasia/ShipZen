@@ -1025,104 +1025,6 @@ def delete_env_var(request: Request, project_id: str, key: str, project: dict = 
 
 # ── Webhooks ──────────────────────────────────────────────────────────────────
 
-@app.post("/projects/{project_id}/webhooks/install", tags=["Webhooks"])
-@limiter.limit("5/minute")
-async def install_github_webhook(
-    request: Request,
-    project_id: str,
-    body: InstallWebhookRequest,
-    current_user: User = Depends(get_current_user),
-    project: dict = Depends(verify_project_access)
-):
-    """Automatically configure the GitHub webhook for the given repository using the user's OAuth token."""
-    
-    # 1. Parse repo owner and name from repo_url
-    match = re.search(r'github\.com/([^/]+)/([^/.]+)(?:\.git)?$', body.repo_url)
-    if not match:
-        raise HTTPException(status_code=400, detail="Only GitHub repositories are supported for auto-installation")
-    owner, repo = match.groups()
-
-    # 2. Extract token from Authorization header
-    auth_header = request.headers.get("Authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
-    token = auth_header.split(" ")[1]
-
-    # 3. Check admin permissions
-    try:
-        repo_resp = httpx.get(
-            f"https://api.github.com/repos/{owner}/{repo}",
-            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
-            timeout=10
-        )
-        if repo_resp.status_code == 404 or repo_resp.status_code == 403:
-            raise HTTPException(status_code=403, detail="You must have admin access to this repository to automatically install webhooks.")
-        repo_resp.raise_for_status()
-        
-        permissions = repo_resp.json().get("permissions", {})
-        if not permissions.get("admin"):
-            raise HTTPException(status_code=403, detail="You must have admin access to this repository to automatically install webhooks.")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to fetch repo permissions for webhook install: {e}")
-        raise HTTPException(status_code=500, detail="Failed to verify repository permissions with GitHub")
-
-    # 4. Get webhook_secret for this project
-    try:
-        with get_connection() as conn:
-            with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute("SELECT webhook_secret FROM projects WHERE id = %s;", (project_id,))
-                row = cur.fetchone()
-                if not row or not row["webhook_secret"]:
-                    raise HTTPException(status_code=404, detail="Webhook secret not found")
-                webhook_secret = row["webhook_secret"]
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to fetch webhook secret for {project_id}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to load project details")
-
-    # 5. Create webhook via GitHub API
-    webhook_url = f"https://{request.base_url.hostname}/api/v1/webhooks/github/{project_id}"
-    
-    payload = {
-        "name": "web",
-        "active": True,
-        "events": ["push"],
-        "config": {
-            "url": webhook_url,
-            "content_type": "json",
-            "secret": webhook_secret,
-            "insecure_ssl": "0"
-        }
-    }
-
-    try:
-        post_resp = httpx.post(
-            f"https://api.github.com/repos/{owner}/{repo}/hooks",
-            headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"},
-            json=payload,
-            timeout=10
-        )
-        if post_resp.status_code == 422:
-            # Often means it already exists, check errors
-            errors = post_resp.json().get("errors", [])
-            for error in errors:
-                if "already exists" in error.get("message", ""):
-                    return {"message": "Webhook already exists on this repository."}
-            raise HTTPException(status_code=422, detail="GitHub rejected the webhook configuration")
-            
-        post_resp.raise_for_status()
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to create webhook for {project_id} on {body.repo_url}: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create webhook via GitHub API")
-
-    return {"message": "Webhook installed successfully"}
-
-
 @app.post("/webhooks/github/{project_id}", tags=["Webhooks"])
 @limiter.limit("60/minute")
 async def github_webhook(request: Request, project_id: str):
@@ -1245,6 +1147,121 @@ async def github_webhook(request: Request, project_id: str):
     )
     
     return {"message": "Deployment triggered", "deployment_id": deployment_id}
+
+@app.post("/webhooks/github-app", tags=["Webhooks"])
+@limiter.limit("120/minute")
+async def github_app_webhook(request: Request):
+    """Global webhook receiver for the ShipZen GitHub App."""
+    signature_header = request.headers.get("x-hub-signature-256")
+    if not signature_header:
+        raise HTTPException(status_code=400, detail="Missing signature")
+        
+    if request.headers.get("X-GitHub-Event") != "push":
+        return JSONResponse(status_code=200, content={"message": "event ignored"})
+        
+    app_secret = os.getenv("GITHUB_APP_WEBHOOK_SECRET")
+    if not app_secret:
+        logger.error("GITHUB_APP_WEBHOOK_SECRET is not set")
+        raise HTTPException(status_code=500, detail="Server configuration error")
+
+    body_bytes = await request.body()
+    expected_mac = hmac.new(app_secret.encode(), body_bytes, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(f"sha256={expected_mac}", signature_header):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+        
+    import json
+    try:
+        payload = json.loads(body_bytes)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    
+    branch = "main"
+    if "ref" in payload:
+        branch = payload["ref"].split("/")[-1]
+    
+    # payload['repository']['clone_url'] gives https://github.com/owner/repo.git
+    # payload['repository']['html_url'] gives https://github.com/owner/repo
+    repo_url = payload.get("repository", {}).get("clone_url")
+    html_url = payload.get("repository", {}).get("html_url")
+    if not repo_url and not html_url:
+        raise HTTPException(status_code=400, detail="Missing repository URL in payload")
+        
+    # Find matching project
+    try:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                # Find the most recently updated project that uses this repo
+                cur.execute(
+                    """
+                    SELECT project_id, port, repo_url 
+                    FROM deployments 
+                    WHERE repo_url = %s OR repo_url = %s 
+                    ORDER BY updated_at DESC LIMIT 1;
+                    """,
+                    (repo_url, html_url)
+                )
+                last_deploy = cur.fetchone()
+                
+                if not last_deploy:
+                    logger.info(f"Ignored push event for {repo_url} - no matching ShipZen project found.")
+                    return JSONResponse(status_code=200, content={"message": "No matching project, event ignored"})
+                
+                project_id = last_deploy["project_id"]
+                port = last_deploy["port"]
+                matched_repo_url = last_deploy["repo_url"]
+                
+    except Exception as e:
+        logger.error(f"Failed to lookup project for github app webhook: {e}")
+        raise HTTPException(status_code=500, detail="Database error during project lookup")
+        
+    deployment_id = str(uuid.uuid4())
+    queued_at = str(time.time())
+    if ECR_REPOSITORY_URL:
+        base_registry = ECR_REPOSITORY_URL.split("/")[0]
+        image_uri = f"{base_registry}/shipzen-builds/{project_id}:{deployment_id}"
+    else:
+        image_uri = f"local/shipzen-builds/{project_id}:{deployment_id}"
+    
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO deployments (deployment_id, project_id, repo_url, image_uri, replicas, port, state)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'Queued')
+                    """,
+                    (deployment_id, project_id, matched_repo_url, image_uri, 1, port)
+                )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to process webhook DB insert for {project_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process webhook")
+
+    try:
+        r = get_redis()
+        r.xadd(STREAM_NAME, {
+            "deployment_id": deployment_id,
+            "project_id":    project_id,
+            "repo_url":      matched_repo_url,
+            "branch":        branch,
+            "image_name":    image_uri,
+            "queued_at":     queued_at,
+            "retries":       "0",
+        })
+    except Exception as e:
+        logger.error(f"Failed to enqueue webhook deployment {deployment_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to enqueue webhook deployment")
+        
+    log_audit_event(
+        project_id=project_id,
+        user_id="github-app",
+        action="WEBHOOK_DEPLOY",
+        resource_type="deployment",
+        resource_id=deployment_id,
+        details={"repo_url": matched_repo_url, "branch": branch, "via": "github-app"},
+    )
+    
+    return {"message": "Deployment triggered via GitHub App", "deployment_id": deployment_id}
 
 # ── Users & Admin ─────────────────────────────────────────────────────────────
 

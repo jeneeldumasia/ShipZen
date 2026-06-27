@@ -134,7 +134,7 @@ export default async function ProjectPage({ params }: { params: { id: string } }
       </div>
 
       <EnvVars projectId={project.id} />
-      <Webhooks projectId={project.id} webhookSecret={project.webhook_secret} repoUrl={deployments?.[0]?.repo_url} />
+      <Webhooks />
       <ProjectShortcuts projectId={project.id} />
     </div>
   );
