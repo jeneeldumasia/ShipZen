@@ -60,7 +60,7 @@ export default async function AdminUsersPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {users.map((u: Record<string, unknown>) => (
+            {users.map((u: any) => (
               <tr key={u.id} className="hover:bg-white/5 transition-colors">
                 <td className="px-6 py-4 font-mono text-xs">{u.id}</td>
                 <td className="px-6 py-4">{u.email || "No Email"}</td>

@@ -16,7 +16,7 @@ export default async function AdminProjectsPage() {
   const session = await auth();
   if (!(session as { accessToken?: string })?.accessToken) redirect("/login");
 
-  const projects = await getGlobalProjects((session as { accessToken?: string }).accessToken);
+  const projects = await getGlobalProjects((session as { accessToken?: string }).accessToken as string);
 
   return (
     <div className="space-y-6">
@@ -42,7 +42,7 @@ export default async function AdminProjectsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-white/10">
-            {projects.map((p: Record<string, unknown>) => (
+            {projects.map((p: any) => (
               <tr key={p.id} className="hover:bg-white/5 transition-colors">
                 <td className="px-6 py-4 font-medium text-white">{p.name}</td>
                 <td className="px-6 py-4 font-mono text-xs">{p.namespace}</td>

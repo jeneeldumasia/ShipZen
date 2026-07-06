@@ -16,7 +16,7 @@ import { Toaster } from "sonner";
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   
-  let userWithRole = session?.user as Record<string, unknown>;
+  let userWithRole = session?.user as any;
   if (session && (session as { accessToken?: string }).accessToken) {
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/me`, {

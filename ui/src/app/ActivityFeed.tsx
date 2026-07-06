@@ -46,7 +46,7 @@ export function ActivityFeed() {
           logs.map((log) => (
             <div key={log.id} className="bg-black/5 dark:bg-white/5 border border-canvas-border rounded-lg p-3 text-sm">
               <div className="flex items-start justify-between mb-2">
-                <span className="font-semibold text-xs text-text-primary">{(log as Record<string, string>).project_name || log.project_id.slice(0, 8)}</span>
+                <span className="font-semibold text-xs text-text-primary">{(log as unknown as Record<string, string>).project_name || log.project_id.slice(0, 8)}</span>
                 <span className="text-[10px] text-text-secondary">
                   {new Date(log.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </span>

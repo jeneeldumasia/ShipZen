@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, RefreshCw, GitBranch, Package, Clock, Terminal, Activity } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, Build } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AutoRefresh } from "./AutoRefresh";
 import { RedeployButton } from "./RedeployButton";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 const STATE_STEPS = ["Queued", "Building", "Deploying", "Verifying", "Running"];
 
-function Pipeline({ state, builds }: { state: string, builds: Record<string, unknown>[] }) {
+function Pipeline({ state, builds }: { state: string, builds: Build[] }) {
   const isFailed = state === "Failed" || state === "DLQ";
   
   let failIndex = -1;

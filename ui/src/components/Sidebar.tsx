@@ -13,7 +13,7 @@ const NAV = [
   { href: "/observability",    label: "Platform Health", icon: Activity },
 ];
 
-export function Sidebar({ user }: { user?: Record<string, unknown> }) {
+export function Sidebar({ user }: { user?: any }) {
   const pathname = usePathname();
 
   return (
