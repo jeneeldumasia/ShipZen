@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Create non-root user matching Kubernetes runAsUser: 1000
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup --uid 1000 appuser
+RUN groupadd -r appgroup && useradd -r -g appgroup -u 1000 appuser
 USER appuser
 
 EXPOSE 8000
