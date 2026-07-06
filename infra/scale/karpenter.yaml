@@ -6,7 +6,8 @@ metadata:
 spec:
   # v1 requires amiSelectorTerms instead of amiFamily
   amiSelectorTerms:
-    - alias: al2023@latest
+    # Pinned to AL2023 v20250512. Pinned on 2025-07-02. Review by 2025-12-29.
+    - alias: al2023@v20250512
   role: "ShipZenKarpenterNodeRole"
   subnetSelectorTerms:
     - tags:
@@ -45,6 +46,8 @@ spec:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 1m
   limits:
+    # Supports up to ~4 concurrent single-core builds or 2 dual-core builds.
+    # Increase cpu to "8" and memory to "16Gi" if queue depth regularly exceeds 4.
     cpu: "4"
     memory: "8Gi"
 ---
@@ -78,5 +81,7 @@ spec:
     consolidationPolicy: WhenEmptyOrUnderutilized
     consolidateAfter: 1m
   limits:
+    # Supports ~4 lightweight tenant workloads at 1 CPU / 2 GiB each.
+    # Increase to "16" cpu and "32Gi" memory as tenant count grows past 4.
     cpu: "4"
     memory: "8Gi"

@@ -46,8 +46,11 @@ jobs:
         working-directory: ./terraform
         run: |
           aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster || true
-          kubectl delete validatingwebhookconfigurations --all || true
-          kubectl delete mutatingwebhookconfigurations --all || true
+          # Only delete specific webhooks known to cause stuck ArgoCD syncs.
+          # Do NOT use --all: that would delete Kyverno and cert-manager webhooks too.
+          # shipzen-platform-webhook: ArgoCD application webhook that sometimes sticks post-deploy.
+          kubectl delete validatingwebhookconfigurations shipzen-platform-webhook --ignore-not-found || true
+          # Add further names here with an inline comment explaining why each is targeted.
 
       # Bootstrap: Ensure the GitHub Actions OIDC role has EKS cluster admin access.
       # This uses the AWS API (not the Kubernetes API), so it works even when

@@ -20,11 +20,6 @@ jobs:
     strategy:
       matrix:
         component: [api, ui, controller, worker]
-    outputs:
-      api_tag:        ${{ steps.tag.outputs.tag }}
-      ui_tag:         ${{ steps.tag.outputs.tag }}
-      controller_tag: ${{ steps.tag.outputs.tag }}
-      worker_tag:     ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -80,22 +75,30 @@ jobs:
           echo "Updating all built components to tag: $TAG"
 
           python3 - <<'PYEOF'
-          import re, os, sys
+          import re, os
 
           tag = os.environ["TAG"]
           components = ["api", "ui", "controller", "worker"]
           path = "infra/kustomization.yaml"
 
           with open(path, "r") as f:
-              lines = f.readlines()
+              content = f.read()
 
-          for i, line in enumerate(lines):
-              for c in components:
-                  if f"name: shipzen-{c}" in line:
-                      # newTag is always 2 lines below the name: line
-                      lines[i + 2] = re.sub(r"newTag: .*", f"newTag: {tag}\n", lines[i + 2])
+          # Update each component's newTag using a pattern that matches the
+          # name: / newName: / newTag: block regardless of existing blank lines
+          for c in components:
+              content = re.sub(
+                  rf'(name: shipzen-{c}\n\s+newName:[^\n]+\n\s+newTag:) [^\n]+',
+                  rf'\1 {tag}',
+                  content
+              )
+
+          # Collapse any run of >2 consecutive blank lines to 1 blank line
+          # to prevent the file from accumulating blank lines on repeated runs
+          content = re.sub(r'\n{3,}', '\n\n', content)
+
           with open(path, "w") as f:
-              f.writelines(lines)
+              f.write(content)
           PYEOF
         env:
           TAG: sha-$(git rev-parse --short HEAD)

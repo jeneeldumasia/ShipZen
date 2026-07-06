@@ -14,6 +14,7 @@ import logging
 from typing import Optional
 
 import redis as redis_lib
+import redis.asyncio as aioredis
 import psycopg2
 from psycopg2.extras import DictCursor
 from fastapi import FastAPI, HTTPException, Query, Depends, WebSocket, WebSocketDisconnect
@@ -61,11 +62,12 @@ _REPO_URL_RE = re.compile(
 # Kubernetes namespace name rules: lowercase alphanumeric and hyphens, 3–63 chars
 _NAMESPACE_RE = re.compile(r'^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$')
 
-# ── Redis client ──────────────────────────────────────────────────────────────
 
-
+_redis_pool = redis_lib.ConnectionPool(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+_redis_client = redis_lib.Redis(connection_pool=_redis_pool)
+_aioredis_client = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 def get_redis() -> redis_lib.Redis:
-    return redis_lib.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    return _redis_client
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
@@ -74,6 +76,8 @@ def get_redis() -> redis_lib.Redis:
 async def lifespan(app: FastAPI):
     init_db()
     yield
+    await _aioredis_client.aclose()
+    _redis_client.close()
 
 app = FastAPI(
     title="ShipZen API",
@@ -199,7 +203,10 @@ def create_project(request: Request, body: CreateProjectRequest, current_user: U
                 )
 
             conn.commit()
-    except psycopg2.errors.UniqueViolation:
+    except psycopg2.errors.UniqueViolation as e:
+        if "namespace" in str(e):
+            raise HTTPException(
+                status_code=409, detail="A project with this namespace already exists")
         raise HTTPException(
             status_code=409, detail="A project with this ID already exists")
     except Exception as e:
@@ -422,28 +429,39 @@ class AnalyzeRequest(BaseModel):
 
 @app.post("/projects/analyze", tags=["Projects"])
 @limiter.limit("5/minute")
-def analyze_repo(request: Request, body: AnalyzeRequest, current_user: User = Depends(get_current_user)):
+async def analyze_repo(request: Request, body: AnalyzeRequest, current_user: User = Depends(get_current_user)):
     """Analyze a Git repository and detect deployable services."""
+    import asyncio
     import tempfile
     import subprocess
     from analyzer import RepoAnalyzer
 
-    # Fix 4: Validate branch name to prevent shell injection
+    # Validate branch name to prevent shell injection
     if not re.match(r'^[a-zA-Z0-9_.-]{1,100}$', body.branch):
         raise HTTPException(status_code=400, detail="Invalid branch name")
 
-    try:
-        # Fix 4: Move TemporaryDirectory inside try
+    def _clone_and_analyze():
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Fix 4: timeout=60, capture_output=True
-            subprocess.run(
-                ["git", "clone", "--depth", "1", "-b",
-                    body.branch, body.repo_url, tmpdir],
-                check=True, capture_output=True, timeout=60
-            )
+            try:
+                subprocess.run(
+                    ["git", "clone", "--depth", "1", "-b",
+                        body.branch, body.repo_url, tmpdir],
+                    check=True, capture_output=True, timeout=60
+                )
+            except subprocess.TimeoutExpired:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Repository clone timed out after 60 seconds"
+                )
             analyzer = RepoAnalyzer(
-                repo_path=tmpdir, repo_name=body.repo_url.split('/')[-1].replace('.git', ''))
-            services = analyzer.analyze()
+                repo_path=tmpdir,
+                repo_name=body.repo_url.split('/')[-1].replace('.git', ''))
+            return analyzer.analyze()
+
+    try:
+        services = await asyncio.to_thread(_clone_and_analyze)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to clone repo for analysis: {e}")
         raise HTTPException(
@@ -667,17 +685,15 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
         return
     from auth import get_current_user_from_token
     try:
-        get_current_user_from_token(token)
+        await get_current_user_from_token(token)
     except Exception:
         await websocket.close(code=1008)
         return
 
     await websocket.accept()
 
-    import redis.asyncio as aioredis
     import asyncio
-    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
-    pubsub = r.pubsub()
+    pubsub = _aioredis_client.pubsub()
     await pubsub.subscribe(f"shipzen:status:{deployment_id}")
 
     def fetch_initial():
@@ -694,6 +710,18 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
         if row:
             await websocket.send_json({"state": row['state'], "last_error": row['last_error']})
 
+        main_task = asyncio.current_task()
+
+        async def ping():
+            while True:
+                await asyncio.sleep(30)
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception:
+                    main_task.cancel()
+                    break
+        ping_task = asyncio.create_task(ping())
+
         async for message in pubsub.listen():
             if message["type"] == "message":
                 data = json.loads(message["data"])
@@ -705,18 +733,17 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
     except Exception as e:
         logger.error(f"WS error: {e}")
     finally:
+        if 'ping_task' in locals():
+            ping_task.cancel()
         await pubsub.unsubscribe()
-        await r.aclose()
+        await pubsub.close()
 
 
 @app.get("/projects/{project_id}/deployments/{deployment_id}/logs/stream", tags=["Deployments"])
 async def stream_logs(project_id: str, deployment_id: str, project: dict = Depends(verify_project_access)):
 
-    import redis.asyncio as aioredis
-    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
-
     async def event_stream():
-        pubsub = r.pubsub()
+        pubsub = _aioredis_client.pubsub()
         await pubsub.subscribe(f"shipzen:logs:{deployment_id}")
         try:
             async for message in pubsub.listen():
@@ -724,7 +751,7 @@ async def stream_logs(project_id: str, deployment_id: str, project: dict = Depen
                     yield f"data: {message['data']}\n\n"
         finally:
             await pubsub.unsubscribe()
-            await r.aclose()
+            await pubsub.close()
 
     return StreamingResponse(
         event_stream(),
@@ -751,15 +778,15 @@ async def websocket_deployment_logs(
         return
     from auth import get_current_user_from_token
     try:
-        user = get_current_user_from_token(token)
+        user = await get_current_user_from_token(token)
     except Exception:
         await websocket.close(code=1008)
         return
 
     # Verify the deployment belongs to this project
     try:
-        await verify_project_access(project_id, user)
         import asyncio
+        await asyncio.to_thread(verify_project_access, project_id, user)
         await asyncio.to_thread(_get_deployment_or_404, project_id, deployment_id)
     except HTTPException:
         await websocket.close(code=1008)
@@ -767,12 +794,22 @@ async def websocket_deployment_logs(
 
     await websocket.accept()
 
-    import redis.asyncio as aioredis
-    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
-    pubsub = r.pubsub()
+    pubsub = _aioredis_client.pubsub()
     await pubsub.subscribe(f"shipzen:logs:{deployment_id}")
 
     try:
+        main_task = asyncio.current_task()
+
+        async def ping():
+            while True:
+                await asyncio.sleep(30)
+                try:
+                    await websocket.send_text("ping")
+                except Exception:
+                    main_task.cancel()
+                    break
+        ping_task = asyncio.create_task(ping())
+
         async for message in pubsub.listen():
             if message["type"] == "message":
                 await websocket.send_text(message["data"])
@@ -781,8 +818,10 @@ async def websocket_deployment_logs(
     except Exception as e:
         logger.error(f"Log WS error for {deployment_id}: {e}")
     finally:
+        if 'ping_task' in locals():
+            ping_task.cancel()
         await pubsub.unsubscribe()
-        await r.aclose()
+        await pubsub.close()
 
 # ── Builds ────────────────────────────────────────────────────────────────────
 
@@ -1255,89 +1294,91 @@ async def github_app_webhook(request: Request):
         raise HTTPException(
             status_code=400, detail="Missing repository URL in payload")
 
-    # Find matching project
+    # Find matching projects
     try:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
-                # Find the most recently updated project that uses this repo
+                # Find all distinct projects that use this repo
                 cur.execute(
                     """
-                    SELECT project_id, port, repo_url 
+                    SELECT DISTINCT ON (project_id) project_id, port, repo_url 
                     FROM deployments 
                     WHERE repo_url = %s OR repo_url = %s 
-                    ORDER BY updated_at DESC LIMIT 1;
+                    ORDER BY project_id, updated_at DESC;
                     """,
                     (repo_url, html_url)
                 )
-                last_deploy = cur.fetchone()
+                projects_to_deploy = cur.fetchall()
 
-                if not last_deploy:
+                if not projects_to_deploy:
                     logger.info(
                         f"Ignored push event for {repo_url} - no matching ShipZen project found.")
                     return JSONResponse(status_code=200, content={"message": "No matching project, event ignored"})
-
-                project_id = last_deploy["project_id"]
-                port = last_deploy["port"]
-                matched_repo_url = last_deploy["repo_url"]
 
     except Exception as e:
         logger.error(f"Failed to lookup project for github app webhook: {e}")
         raise HTTPException(
             status_code=500, detail="Database error during project lookup")
 
-    deployment_id = str(uuid.uuid4())
-    queued_at = str(time.time())
-    if ECR_REPOSITORY_URL:
-        base_registry = ECR_REPOSITORY_URL.split("/")[0]
-        image_uri = f"{base_registry}/shipzen-builds/{project_id}:{deployment_id}"
-    else:
-        image_uri = f"local/shipzen-builds/{project_id}:{deployment_id}"
+    deployed_ids = []
 
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO deployments (deployment_id, project_id, repo_url, image_uri, replicas, port, state)
-                    VALUES (%s, %s, %s, %s, %s, %s, 'Queued')
-                    """,
-                    (deployment_id, project_id, matched_repo_url, image_uri, 1, port)
-                )
-            conn.commit()
-    except Exception as e:
-        logger.error(
-            f"Failed to process webhook DB insert for {project_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to process webhook")
+    for row in projects_to_deploy:
+        project_id = row["project_id"]
+        port = row["port"]
+        matched_repo_url = row["repo_url"]
 
-    try:
-        r = get_redis()
-        r.xadd(STREAM_NAME, {
-            "deployment_id": deployment_id,
-            "project_id":    project_id,
-            "repo_url":      matched_repo_url,
-            "branch":        branch,
-            "image_name":    image_uri,
-            "queued_at":     queued_at,
-            "retries":       "0",
-        })
-    except Exception as e:
-        logger.error(
-            f"Failed to enqueue webhook deployment {deployment_id}: {e}")
-        raise HTTPException(
-            status_code=500, detail="Failed to enqueue webhook deployment")
+        deployment_id = str(uuid.uuid4())
+        queued_at = str(time.time())
+        if ECR_REPOSITORY_URL:
+            base_registry = ECR_REPOSITORY_URL.split("/")[0]
+            image_uri = f"{base_registry}/shipzen-builds/{project_id}:{deployment_id}"
+        else:
+            image_uri = f"local/shipzen-builds/{project_id}:{deployment_id}"
 
-    log_audit_event(
-        project_id=project_id,
-        user_id="github-app",
-        action="WEBHOOK_DEPLOY",
-        resource_type="deployment",
-        resource_id=deployment_id,
-        details={"repo_url": matched_repo_url,
-                 "branch": branch, "via": "github-app"},
-    )
+        try:
+            with get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO deployments (deployment_id, project_id, repo_url, image_uri, replicas, port, state)
+                        VALUES (%s, %s, %s, %s, %s, %s, 'Queued')
+                        """,
+                        (deployment_id, project_id, matched_repo_url, image_uri, 1, port)
+                    )
+                conn.commit()
+        except Exception as e:
+            logger.error(
+                f"Failed to process webhook DB insert for {project_id}: {e}")
+            continue
 
-    return {"message": "Deployment triggered via GitHub App", "deployment_id": deployment_id}
+        try:
+            r = get_redis()
+            r.xadd(STREAM_NAME, {
+                "deployment_id": deployment_id,
+                "project_id":    project_id,
+                "repo_url":      matched_repo_url,
+                "branch":        branch,
+                "image_name":    image_uri,
+                "queued_at":     queued_at,
+                "retries":       "0",
+            })
+        except Exception as e:
+            logger.error(
+                f"Failed to enqueue webhook deployment {deployment_id}: {e}")
+            continue
+
+        log_audit_event(
+            project_id=project_id,
+            user_id="github-app",
+            action="WEBHOOK_DEPLOY",
+            resource_type="deployment",
+            resource_id=deployment_id,
+            details={"repo_url": matched_repo_url,
+                     "branch": branch, "via": "github-app"},
+        )
+        deployed_ids.append(deployment_id)
+
+    return {"message": "Deployments triggered via GitHub App", "deployment_ids": deployed_ids}
 
 # ── Users & Admin ─────────────────────────────────────────────────────────────
 

@@ -2,14 +2,15 @@ import redis
 import time
 import logging
 import json
-import threading
 import os
 import subprocess
 import shutil
 import uuid
 import boto3
 import base64
+import signal
 import yaml
+from concurrent.futures import ThreadPoolExecutor
 from kubernetes import client, config as k8s_config, watch
 from kubernetes.client.rest import ApiException
 
@@ -23,7 +24,6 @@ from metrics import (
     shipzen_queue_latency_seconds,
     shipzen_retry_total,
     shipzen_deployment_failure_total,
-    shipzen_messages_in_flight,
     shipzen_dlq_depth,
     shipzen_deployments_total
 )
@@ -42,6 +42,9 @@ core_v1 = client.CoreV1Api()
 s3 = boto3.client('s3')
 
 S3_LOG_BUCKET = os.environ.get("S3_LOG_BUCKET", "")
+
+# Limit concurrent monitoring threads to prevent unbounded thread exhaustion
+_executor = ThreadPoolExecutor(max_workers=20)
 
 
 def get_db_conn():
@@ -70,7 +73,7 @@ def record_build(deployment_id: str, s3_key: str, status: str):
         logger.error(f"Failed to record build for {deployment_id}: {e}")
 
 
-def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machine: StateMachine, builder_type: str = "unknown", project_id: str = "unknown"):
+def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machine: StateMachine, builder_type: str = "unknown", project_id: str = "unknown", queue: QueueClient = None, message_id: str = None):
     """Monitors the Kubernetes Job, streams logs to Redis, and finalizes the deployment."""
     logger.info(f"Monitoring Job {job_name} for deployment {deployment_id}")
     r = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT)
@@ -207,7 +210,7 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
                 logger.error(f"Image scan failed: {e}")
                 record_build(deployment_id, s3_log_key, "Failed")
                 shipzen_deployment_failure_total.inc()
-                shipzen_deployments_total.labels(state="Failed", project_id=project_id_db).inc()
+                shipzen_deployments_total.labels(state="Failed", project_id=project_id).inc()
                 state_machine.update_state(deployment_id, "Failed", str(e))
                 return
 
@@ -218,7 +221,7 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
             logger.error(f"Job {job_name} failed.")
             record_build(deployment_id, s3_log_key, "Failed")
             shipzen_deployment_failure_total.inc()
-            shipzen_deployments_total.labels(state="Failed", project_id=project_id_db).inc()
+            shipzen_deployments_total.labels(state="Failed", project_id=project_id).inc()
             state_machine.update_state(
                 deployment_id, "Failed", "Build step failed.")
 
@@ -226,7 +229,7 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
         logger.error(f"Error monitoring job {job_name}: {e}")
         record_build(deployment_id, s3_log_key, "Failed")
         shipzen_deployment_failure_total.inc()
-        shipzen_deployments_total.labels(state="Failed", project_id=project_id_db).inc()
+        shipzen_deployments_total.labels(state="Failed", project_id=project_id).inc()
         state_machine.update_state(deployment_id, "Failed", str(e))
     finally:
         # Cleanup Job
@@ -235,6 +238,8 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
                 job_name, "shipzen-build", propagation_policy="Background")
         except Exception:
             pass
+        if queue and message_id:
+            queue.ack_message(message_id)
 
 
 def process_message(queue: QueueClient, state_machine: StateMachine, message_id: str, data: dict):
@@ -363,21 +368,20 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         try:
             batch_v1.create_namespaced_job(
                 namespace="shipzen-build", body=manifest)
+            logger.info(f"Created Job {job_name} for deployment {deployment_id}")
         except ApiException as e:
-            raise Exception(f"Kubernetes Job creation failed (HTTP {e.status}): {e.reason}. "
-                            f"Ensure the 'shipzen-build' namespace exists and the worker ServiceAccount has batch/jobs create permission.")
-        logger.info(f"Created Job {job_name} for deployment {deployment_id}")
+            if e.status == 409:
+                logger.info(f"Job {job_name} already exists (XAUTOCLAIM redelivery). Continuing to monitor.")
+            else:
+                raise Exception(f"Kubernetes Job creation failed (HTTP {e.status}): {e.reason}. "
+                                f"Ensure the 'shipzen-build' namespace exists and the worker ServiceAccount has batch/jobs create permission.")
 
         # Spawn thread to monitor Job
         builder_type = selected_builder.name if hasattr(
             selected_builder, 'name') else type(selected_builder).__name__
         project_id_db = deployment.get(
             "project_id", "unknown") if deployment else "unknown"
-        t = threading.Thread(target=monitor_job, args=(
-            job_name, deployment_id, image_name, state_machine, builder_type, project_id_db))
-        t.start()
-
-        queue.ack_message(message_id)
+        _executor.submit(monitor_job, job_name, deployment_id, image_name, state_machine, builder_type, project_id_db, queue, message_id)
 
     except Exception as e:
         logger.error(f"Error processing {deployment_id}: {e}")
@@ -393,6 +397,13 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
 
 
 def main():
+    def handle_sigterm(signum, frame):
+        logger.info("Received SIGTERM, shutting down worker forcefully to avoid atexit hang...")
+        os._exit(0)
+
+    signal.signal(signal.SIGTERM, handle_sigterm)
+    signal.signal(signal.SIGINT, handle_sigterm)
+
     start_metrics_server(port=8000)
     queue = QueueClient()
     state_machine = StateMachine()

@@ -1,8 +1,12 @@
 name: Container Security Scan (Trivy)
 
+# SECURITY NOTE: trivy-action was compromised in CVE-2026-33634 (March 2026).
+# We install the Trivy binary directly from the official GitHub release rather
+# than using the trivy-action GitHub Action, eliminating the supply chain risk.
+
 on:
   schedule:
-    - cron: '0 2 * * *' # Run nightly at 2 AM
+    - cron: '0 2 * * *' # Run nightly at 2 AM UTC
   workflow_dispatch:
 
 permissions:
@@ -15,10 +19,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run Trivy vulnerability scanner on local code
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          ignore-unfixed: true
-          format: 'table'
-          severity: 'CRITICAL,HIGH'
+      - name: Install Trivy from official release
+        run: |
+          # Pin to a specific known-good version. Update deliberately after reviewing release notes.
+          TRIVY_VERSION="0.69.3"
+          curl -sfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            -o trivy.tar.gz
+          # Verify checksum
+          curl -sfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt" \
+            -o trivy_checksums.txt
+          grep "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" trivy_checksums.txt | sha256sum --check
+          tar -xzf trivy.tar.gz trivy
+          sudo mv trivy /usr/local/bin/trivy
+          trivy --version
+
+      - name: Run Trivy filesystem scan
+        run: |
+          trivy fs \
+            --ignore-unfixed \
+            --format table \
+            --severity CRITICAL,HIGH \
+            --exit-code 1 \
+            .

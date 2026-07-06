@@ -47,6 +47,12 @@ RECONCILIATION_INTERVAL = int(os.getenv("RECONCILIATION_INTERVAL", "15"))
 # Format: 123456789012.dkr.ecr.us-east-1.amazonaws.com
 ECR_REGISTRY = os.getenv("ECR_REGISTRY", "")
 
+REDIS_HOST = os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+
+# Module-level Redis singleton — created once, reused across all reconcile ticks.
+_redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+
 jinja_env = Environment(loader=FileSystemLoader("templates"))
 
 
@@ -204,96 +210,102 @@ def delete_namespace(namespace: str):
 @shipzen_reconciliation_duration_seconds.time()
 def reconcile():
     logger.info("Starting reconciliation loop...")
+    # Outer connection: read-only project list fetch only.
+    # Each project then gets its own connection so a failure in one project
+    # cannot roll back or corrupt the state of another.
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             cur.execute("SELECT * FROM projects;")
-            projects = cur.fetchall()
-
-            for row in projects:
-                project_data = dict(row)
-                project_data["_id"] = project_data.pop("id")
-
-                try:
-                    project = ProjectSchema(**project_data)
-
-                    with conn.cursor(cursor_factory=DictCursor) as project_cur:
-                        if project.status == ProjectStatus.PROVISIONING:
-                            logger.info(
-                                f"Provisioning project: {project.name} ({project.namespace})")
-                            template = jinja_env.get_template("tenant.yaml.j2")
-                            manifests = template.render(
-                                namespace=project.namespace,
-                                project_id=project.id,
-                                ecr_registry=ECR_REGISTRY,
-                            )
-                            # Fix #1: actually applies manifests now.
-                            apply_manifests(manifests)
-
-                            # Fix #12: only mark READY after verifying the namespace
-                            # was actually created. This breaks the race where the DB
-                            # is marked READY before K8s has processed the request.
-                            if check_namespace_exists(project.namespace):
-                                ensure_ecr_repository(project.id)
-                                project_cur.execute(
-                                    "UPDATE projects SET status = %s WHERE id = %s;",
-                                    (ProjectStatus.READY.value, project.id)
-                                )
-                                conn.commit()
-                                logger.info(
-                                    f"Project {project.name} provisioned and Ready.")
-                            else:
-                                # Namespace not visible yet; leave as PROVISIONING
-                                # and retry on the next reconcile tick.
-                                conn.rollback()
-                                logger.info(
-                                    f"Namespace {project.namespace} not yet visible; will retry.")
-
-                        elif project.status == ProjectStatus.TERMINATING:
-                            logger.info(
-                                f"Terminating project: {project.name} ({project.namespace})")
-                            if check_namespace_exists(project.namespace):
-                                delete_namespace(project.namespace)
-                                logger.info(
-                                    f"Namespace {project.namespace} deletion triggered.")
-                                conn.commit()
-                            else:
-                                project_cur.execute(
-                                    "DELETE FROM projects WHERE id = %s;", (project.id,))
-                                conn.commit()
-                                logger.info(
-                                    f"Project {project.name} permanently cleaned up.")
-
-                        elif project.status == ProjectStatus.READY:
-                            if not check_namespace_exists(project.namespace):
-                                shipzen_drift_total.inc()
-                                logger.warning(
-                                    f"Drift detected! Namespace {project.namespace} missing for Ready project.")
-                                project_cur.execute(
-                                    "UPDATE projects SET status = %s WHERE id = %s;",
-                                    (ProjectStatus.PROVISIONING.value, project.id)
-                                )
-                                conn.commit()
-                            else:
-                                reconcile_deployments(
-                                    conn, project_cur, project)
-
-                except Exception as e:
-                    logger.error(f"Error reconciling project {row['id']}: {e}")
-                    try:
-                        conn.rollback()
-                        with get_db_connection() as err_conn:
-                            with err_conn.cursor() as err_cur:
-                                err_cur.execute(
-                                    "UPDATE projects SET status = %s WHERE id = %s;",
-                                    (ProjectStatus.FAILED.value, row['id'])
-                                )
-                            err_conn.commit()
-                    except Exception as rb_err:
-                        logger.error(f"Failed to set FAILED state: {rb_err}")
-
+            projects = [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
+
+    for row in projects:
+        project_data = dict(row)
+        project_data["_id"] = project_data.pop("id")
+
+        # Per-project connection — failure here cannot affect other projects
+        project_conn = get_db_connection()
+        try:
+            project = ProjectSchema(**project_data)
+
+            with project_conn.cursor(cursor_factory=DictCursor) as project_cur:
+                if project.status == ProjectStatus.PROVISIONING:
+                    logger.info(
+                        f"Provisioning project: {project.name} ({project.namespace})")
+                    template = jinja_env.get_template("tenant.yaml.j2")
+                    manifests = template.render(
+                        namespace=project.namespace,
+                        project_id=project.id,
+                        ecr_registry=ECR_REGISTRY,
+                    )
+                    apply_manifests(manifests)
+
+                    if check_namespace_exists(project.namespace):
+                        ensure_ecr_repository(project.id)
+                        project_cur.execute(
+                            "UPDATE projects SET status = %s WHERE id = %s;",
+                            (ProjectStatus.READY.value, project.id)
+                        )
+                        project_conn.commit()
+                        logger.info(
+                            f"Project {project.name} provisioned and Ready.")
+                    else:
+                        project_conn.rollback()
+                        logger.info(
+                            f"Namespace {project.namespace} not yet visible; will retry.")
+
+                elif project.status == ProjectStatus.TERMINATING:
+                    logger.info(
+                        f"Terminating project: {project.name} ({project.namespace})")
+                    if check_namespace_exists(project.namespace):
+                        delete_namespace(project.namespace)
+                        logger.info(
+                            f"Namespace {project.namespace} deletion triggered.")
+                        project_conn.commit()
+                    else:
+                        project_cur.execute(
+                            "DELETE FROM projects WHERE id = %s;", (project.id,))
+                        project_conn.commit()
+                        logger.info(
+                            f"Project {project.name} permanently cleaned up.")
+
+                elif project.status == ProjectStatus.READY:
+                    if not check_namespace_exists(project.namespace):
+                        shipzen_drift_total.inc()
+                        logger.warning(
+                            f"Drift detected! Namespace {project.namespace} missing for Ready project.")
+                        project_cur.execute(
+                            "UPDATE projects SET status = %s WHERE id = %s;",
+                            (ProjectStatus.PROVISIONING.value, project.id)
+                        )
+                        project_conn.commit()
+                    else:
+                        reconcile_deployments(
+                            project_conn, project_cur, project)
+
+        except Exception as e:
+            logger.error(f"Error reconciling project {row['id']}: {e}")
+            try:
+                project_conn.rollback()
+            except Exception:
+                pass
+            try:
+                err_conn = get_db_connection()
+                try:
+                    with err_conn.cursor() as err_cur:
+                        err_cur.execute(
+                            "UPDATE projects SET status = %s WHERE id = %s;",
+                            (ProjectStatus.FAILED.value, row['id'])
+                        )
+                    err_conn.commit()
+                finally:
+                    err_conn.close()
+            except Exception as rb_err:
+                logger.error(f"Failed to set FAILED state: {rb_err}")
+        finally:
+            project_conn.close()
 
 
 def reconcile_deployments(conn, cur, project):
@@ -358,9 +370,7 @@ def reconcile_deployments(conn, cur, project):
                         )
                         conn.commit()
                         try:
-                            r = redis.Redis(host=os.getenv(
-                                "REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local"), port=6379)
-                            r.publish(f"shipzen:status:{d_id}", json.dumps(
+                            _redis_client.publish(f"shipzen:status:{d_id}", json.dumps(
                                 {"state": "Failed", "last_error": "Kubernetes Deployment Failed/CrashLoopBackOff"}))
                         except Exception as pub_e:
                             logger.warning(
@@ -375,17 +385,17 @@ def reconcile_deployments(conn, cur, project):
                         conn.commit()
                         shipzen_deployment_success_total.inc()
                         try:
-                            r = redis.Redis(host=os.getenv(
-                                "REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local"), port=6379)
-                            r.publish(f"shipzen:status:{d_id}", json.dumps(
+                            _redis_client.publish(f"shipzen:status:{d_id}", json.dumps(
                                 {"state": "Running", "last_error": None}))
                         except Exception as pub_e:
                             logger.warning(
                                 f"Failed to publish to Redis: {pub_e}")
 
         # 2. Orphan Resources Cleanup
+        # States that indicate a live or in-flight deployment — never garbage collect these.
+        _LIVE_STATES = {'Running', 'Verifying', 'Deploying', 'Queued', 'Building'}
         for k8s_name in k8s_dep_names.keys():
-            if k8s_name not in db_deployments or db_deployments[k8s_name]['state'] not in ['Running', 'Verifying', 'Deploying']:
+            if k8s_name not in db_deployments or db_deployments[k8s_name]['state'] not in _LIVE_STATES:
                 shipzen_drift_total.inc()
                 logger.warning(
                     f"Drift: Orphan Deployment {k8s_name} found in K8s. Cleaning up...")

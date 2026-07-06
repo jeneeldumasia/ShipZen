@@ -6,7 +6,6 @@ metadata:
   labels:
     app: shipzen-controller
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: shipzen-controller

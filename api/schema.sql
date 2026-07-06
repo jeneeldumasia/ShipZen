@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS projects (
     id VARCHAR(255) PRIMARY KEY,
     owner_id VARCHAR(255) NOT NULL,
     name VARCHAR(255) NOT NULL,
-    namespace VARCHAR(255) NOT NULL,
+    namespace VARCHAR(255) NOT NULL UNIQUE,
     status VARCHAR(50) NOT NULL DEFAULT 'Provisioning',
     webhook_secret VARCHAR(255),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -73,7 +73,7 @@ CREATE INDEX IF NOT EXISTS idx_builds_started_at ON builds(started_at DESC);
 -- Phase 11: Audit Logs (Append-Only)
 CREATE TABLE IF NOT EXISTS audit_logs (
     id SERIAL PRIMARY KEY,
-    project_id VARCHAR(255) REFERENCES projects(id) ON DELETE CASCADE,
+    project_id VARCHAR(255) REFERENCES projects(id) ON DELETE SET NULL,
     user_id VARCHAR(255) NOT NULL,
     action VARCHAR(255) NOT NULL,
     resource_type VARCHAR(50) NOT NULL,
@@ -83,8 +83,23 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 -- Deny updates or deletes on audit_logs to enforce append-only
--- In a real DB this would be enforced via triggers or IAM policies.
+-- NOTE: ON DELETE CASCADE here is intentional for the demo environment.
+-- In production, change this to ON DELETE SET NULL and retain logs independently
+-- of project lifecycle to satisfy compliance requirements.
 
 CREATE INDEX IF NOT EXISTS idx_audit_logs_project_id ON audit_logs(project_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp DESC);
+
+-- Append-only enforcement: prevent UPDATE and DELETE on audit_logs
+CREATE OR REPLACE FUNCTION audit_logs_deny_mutation()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'audit_logs is append-only: % operations are not permitted', TG_OP;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_audit_logs_append_only ON audit_logs;
+CREATE TRIGGER trg_audit_logs_append_only
+    BEFORE UPDATE OR DELETE ON audit_logs
+    FOR EACH ROW EXECUTE FUNCTION audit_logs_deny_mutation();

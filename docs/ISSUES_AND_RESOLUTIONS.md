@@ -114,3 +114,13 @@ This document tracks recently encountered infrastructure, deployment, and UI iss
 * **Resolution:** Appended `dark:text-black` to the `.nav-item.active` class in `globals.css` so the text shifts to black when the active glassmorphism background is bright white.
 * **Did it work?** Yes. The navigation is now highly legible in both dark and light modes.
 
+## Technical Debt & Pending Architecture Improvements
+
+### 23. Multi-Tenant Webhook Branch Cross-Contamination
+* **Issue:** The `projects` database schema lacks explicit `repo_url` and `branch` configuration. GitHub webhooks blindly trigger deployments across all projects sharing a repository using whatever branch was just pushed, cross-contaminating staging and production environments.
+* **Proposed Resolution:** Migrate the `projects` table to explicitly store `repo_url` and `branch`. The webhook receiver (`api/main.py`) must be updated to filter matching projects against the pushed branch.
+
+### 24. Admin Role Revocation Cache Delay
+* **Issue:** Caching the fully resolved `User` object (including role) in `api/auth.py` eliminates database overhead but causes a 5-minute propagation delay when a user's role is updated via the `/admin/users/{user_id}/role` API. Demoted admins retain access until their cache TTL expires.
+* **Proposed Resolution:** Implement a global reverse-mapping dictionary (`user_id -> list[token_hashes]`) so the admin endpoint can explicitly evict tokens from the cache upon role demotion.
+

@@ -55,11 +55,7 @@ spec:
                   name: shipzen-ecr-config
                   key: repository_url
             - name: GITHUB_ENABLED
-              valueFrom:
-                secretKeyRef:
-                  name: shipzen-github
-                  key: enabled
-                  optional: true
+              value: "true"   # Set to "false" only in local development — disables auth entirely
             - name: GITHUB_APP_WEBHOOK_SECRET
               valueFrom:
                 secretKeyRef:

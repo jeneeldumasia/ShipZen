@@ -9,9 +9,13 @@ resources:
   - servicemonitors.yaml
   - alertmanager-config.yaml
   - shipzen-tls-cert.yaml
+  - shipzen-auth-secret.yaml
   - gateway.yaml
   - grafana-route.yaml
   - kyverno-exception.yaml
   - build-namespace-exception.yaml
   - grafana-dashboards.yaml
+  - ecr-token-rotator-sa.yaml
   - ecr-token-rotator.yaml
+  - ecr-token-rotator-sa.yaml
+  - ui-auth-external-secret.yaml

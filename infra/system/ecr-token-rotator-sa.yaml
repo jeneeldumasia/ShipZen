@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ecr-token-rotator-sa
+  namespace: shipzen-system
+  annotations:
+    # IRSA: bind this ServiceAccount to the IAM role that has
+    # ecr:GetAuthorizationToken and secretsmanager:PutSecretValue permissions.
+    eks.amazonaws.com/role-arn: arn:aws:iam::952994886652:role/ShipZenECRRotatorRole

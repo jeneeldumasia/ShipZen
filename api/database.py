@@ -1,3 +1,4 @@
+import threading
 from auth import get_current_user, User
 from fastapi import Depends, HTTPException
 from psycopg2.pool import ThreadedConnectionPool
@@ -16,6 +17,7 @@ if not DATABASE_URL:
 
 
 db_pool = None
+_db_pool_lock = threading.Lock()
 
 
 class PooledConnectionWrapper:
@@ -51,8 +53,10 @@ class PooledConnectionWrapper:
 
 def get_connection():
     global db_pool
-    if db_pool is None:
-        db_pool = ThreadedConnectionPool(1, 20, dsn=DATABASE_URL)
+    if db_pool is None:                     # fast path — no lock once initialised
+        with _db_pool_lock:
+            if db_pool is None:             # double-checked locking
+                db_pool = ThreadedConnectionPool(1, 20, dsn=DATABASE_URL)
     conn = db_pool.getconn()
     return PooledConnectionWrapper(conn, db_pool)
 
@@ -83,38 +87,36 @@ def get_deployments_paginated(project_id: str, limit: int = 20, cursor_updated_a
 
 def get_or_create_user(user_id: str, email: str = None) -> dict:
     """Gets a user by ID, or creates them. The first user created gets the 'admin' role."""
-    conn = get_connection()
-    try:
-        with conn.cursor(cursor_factory=DictCursor) as cur:
-            cur.execute("SELECT id, role FROM users WHERE id = %s", (user_id,))
-            user = cur.fetchone()
-            if user:
-                return dict(user)
+    with get_connection() as conn:
+        try:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute("SELECT id, role FROM users WHERE id = %s", (user_id,))
+                user = cur.fetchone()
+                if user:
+                    return dict(user)
 
-            cur.execute("SELECT COUNT(*) FROM users")
-            count = cur.fetchone()[0]
-            role = 'admin' if count == 0 else 'user'
+                # Fix 11: get_or_create_user has a TOCTOU race condition
+                # Use an advisory lock to prevent race condition during initial admin creation
+                cur.execute("SELECT pg_advisory_xact_lock(hashtext('users_insert_lock'));")
+                cur.execute("SELECT COUNT(*) FROM users")
+                count = cur.fetchone()[0]
+                role = 'admin' if count == 0 else 'user'
 
-            # Fix 11: get_or_create_user has a TOCTOU race condition
-            try:
                 cur.execute(
                     "INSERT INTO users (id, email, role) VALUES (%s, %s, %s) RETURNING id, role",
                     (user_id, email, role)
                 )
                 new_user = cur.fetchone()
-                conn.commit()
                 return dict(new_user)
-            except psycopg2.errors.UniqueViolation:
-                conn.rollback()
+        except psycopg2.errors.UniqueViolation:
+            conn.rollback()
+            with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute(
                     "SELECT id, role FROM users WHERE id = %s", (user_id,))
                 return dict(cur.fetchone())
-    except Exception as e:
-        conn.rollback()
-        logger.error(f"Failed to get_or_create_user: {e}")
-        raise
-    finally:
-        conn.close()
+        except Exception as e:
+            logger.error(f"Failed to get_or_create_user: {e}")
+            raise
 
 
 def enforce_retention_policy():
@@ -169,12 +171,11 @@ def init_db():
         logger.error(f"Failed to read/initialize database schema: {e}")
 
 
-async def verify_project_access(
+def verify_project_access(
     project_id: str,
     current_user: User = Depends(get_current_user)
 ) -> dict:
-    conn = get_connection()
-    try:
+    with get_connection() as conn:
         with conn.cursor(cursor_factory=DictCursor) as cur:
             if current_user.role == 'admin':
                 cur.execute(
@@ -195,5 +196,3 @@ async def verify_project_access(
                     raise HTTPException(
                         status_code=403, detail="You do not have access to this project")
                 return dict(project)
-    finally:
-        conn.close()

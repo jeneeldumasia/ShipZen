@@ -4,7 +4,7 @@ metadata:
   name: shipzen-controller-pdb
   namespace: shipzen-system
 spec:
-  minAvailable: 1
+  maxUnavailable: 1
   selector:
     matchLabels:
       app: shipzen-controller
@@ -15,7 +15,7 @@ metadata:
   name: shipzen-worker-pdb
   namespace: shipzen-system
 spec:
-  minAvailable: 1
+  maxUnavailable: 1
   selector:
     matchLabels:
       app: shipzen-worker
