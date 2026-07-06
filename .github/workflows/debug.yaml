@@ -30,3 +30,15 @@ jobs:
           echo "=== WEBHOOKS ==="
           kubectl get validatingwebhookconfigurations || true
           kubectl get mutatingwebhookconfigurations || true
+          
+          echo "=== FIXING STALE SECRETS & RESTARTING PODS ==="
+          # Delete the Kubernetes secrets so ExternalSecrets recreates them immediately
+          kubectl delete secret shipzen-github -n shipzen-system --ignore-not-found
+          kubectl delete secret shipzen-auth -n shipzen-system --ignore-not-found
+          kubectl delete secret shipzen-ui-auth -n shipzen-system --ignore-not-found
+          
+          echo "=== RESTARTING UI PODS ==="
+          kubectl rollout restart deployment shipzen-ui -n shipzen-system
+          
+          echo "Waiting for UI pods to restart..."
+          kubectl rollout status deployment shipzen-ui -n shipzen-system --timeout=60s || true
