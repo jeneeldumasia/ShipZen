@@ -11,6 +11,7 @@ export default function LoginPage() {
           alt="Abstract 3D Mesh Background"
           fill
           priority
+          unoptimized
           className="object-cover opacity-80"
         />
         {/* Subtle dark gradient overlay to ensure text readability */}
