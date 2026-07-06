@@ -18,3 +18,4 @@ resources:
   - ecr-token-rotator-sa.yaml
   - ecr-token-rotator.yaml
   - ui-auth-external-secret.yaml
+  - github-external-secret.yaml
