@@ -40,6 +40,13 @@ logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('api')
 
+from kubernetes import client, config as k8s_config
+try:
+    k8s_config.load_incluster_config()
+except Exception:
+    pass
+apps_v1 = client.AppsV1Api()
+
 # ── Config ────────────────────────────────────────────────────────────────────
 
 REDIS_HOST = os.getenv(
@@ -1511,3 +1518,87 @@ def _serialize(obj: dict) -> dict:
         k: v.isoformat() if hasattr(v, "isoformat") else v
         for k, v in obj.items()
     }
+
+# ── Restarts ──────────────────────────────────────────────────────────────────
+
+import datetime
+
+@app.post("/projects/{project_id}/deployments/{deployment_id}/restart", tags=["Deployments"])
+@limiter.limit("5/minute")
+def restart_deployment(request: Request, project_id: str, deployment_id: str, current_user: User = Depends(get_current_user)):
+    """Restart a deployment by patching its pod template with a new restartedAt annotation."""
+    project = verify_project_access(project_id, current_user.user_id, "viewer")
+    deployment = _get_deployment_or_404(deployment_id)
+    if deployment["project_id"] != project_id:
+        raise HTTPException(status_code=404, detail="Deployment not found in this project")
+    
+    deployment_name = f"{deployment_id[:8]}-{project['name']}"
+    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    patch = {
+        "spec": {
+            "template": {
+                "metadata": {
+                    "annotations": {
+                        "kubectl.kubernetes.io/restartedAt": now_str
+                    }
+                }
+            }
+        }
+    }
+    try:
+        apps_v1.patch_namespaced_deployment(
+            name=deployment_name,
+            namespace=project["namespace"],
+            body=patch
+        )
+    except Exception as e:
+        logger.error(f"Failed to restart deployment {deployment_name}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to restart deployment")
+    
+    log_audit_event(
+        project_id=project_id,
+        user_id=current_user.user_id,
+        action="RESTART",
+        resource_type="deployment",
+        resource_id=deployment_id,
+        details={"deployment_name": deployment_name},
+    )
+    return {"status": "restarting"}
+
+
+@app.post("/admin/system/restart", tags=["Admin"])
+@limiter.limit("2/minute")
+def restart_system(request: Request, current_user: User = Depends(get_current_user)):
+    """Restart ShipZen system pods (worker and api)."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    patch = {
+        "spec": {
+            "template": {
+                "metadata": {
+                    "annotations": {
+                        "kubectl.kubernetes.io/restartedAt": now_str
+                    }
+                }
+            }
+        }
+    }
+    
+    errors = []
+    for deploy_name in ["shipzen-worker", "shipzen-api"]:
+        try:
+            apps_v1.patch_namespaced_deployment(
+                name=deploy_name,
+                namespace="shipzen-system",
+                body=patch
+            )
+        except Exception as e:
+            logger.error(f"Failed to restart {deploy_name}: {e}")
+            errors.append(str(e))
+            
+    if errors:
+        raise HTTPException(status_code=500, detail=f"Failed to restart some system pods: {', '.join(errors)}")
+        
+    return {"status": "restarting"}

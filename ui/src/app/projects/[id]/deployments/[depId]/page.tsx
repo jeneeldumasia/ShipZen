@@ -5,6 +5,7 @@ import { api, Build } from "@/lib/api";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AutoRefresh } from "./AutoRefresh";
 import { RedeployButton } from "./RedeployButton";
+import { RestartAppButton } from "./RestartAppButton";
 import { LogViewer } from "./LogViewer";
 import { LiveLogPanel } from "./LiveLogPanel";
 import { auth } from "@/auth";
@@ -139,6 +140,7 @@ export default async function DeploymentPage({ params }: { params: { id: string;
               <Activity size={14} />
               View Metrics
             </a>
+            <RestartAppButton projectId={params.id} deploymentId={params.depId} />
             <RedeployButton projectId={params.id} repoUrl={deployment.repo_url} port={deployment.port} />
           </div>
         </div>

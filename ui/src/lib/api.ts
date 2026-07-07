@@ -148,6 +148,10 @@ export const api = {
         method: "POST",
         body: JSON.stringify(body),
       }),
+    restart: (projectId: string, deploymentId: string) =>
+      request<{ status: string }>(`/projects/${projectId}/deployments/${deploymentId}/restart`, {
+        method: "POST",
+      }),
   },
 
   builds: {
@@ -197,5 +201,10 @@ export const api = {
       request<{ message: string }>(`/projects/${projectId}/env/${key}`, {
         method: "DELETE",
       }),
+  },
+
+  admin: {
+    restartSystem: () =>
+      request<{ status: string }>("/admin/system/restart", { method: "POST" }),
   },
 };

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { Rocket, LayoutDashboard, FolderGit2, Zap, Activity, LogOut } from "lucide-react";
+import { Rocket, LayoutDashboard, FolderGit2, Zap, Activity, LogOut, Server } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -49,6 +49,10 @@ export function Sidebar({ user }: { user?: any }) {
         {user?.is_admin && (
           <>
             <p className="section-title mt-6 mb-2">Admin Console</p>
+            <Link href="/admin" className={cn("nav-item", pathname === "/admin" && "active")}>
+              <Server size={16} className="flex-shrink-0" />
+              System Operations
+            </Link>
             <Link href="/admin/projects" className={cn("nav-item", pathname.startsWith("/admin/projects") && "active")}>
               <FolderGit2 size={16} className="flex-shrink-0" />
               Global Projects
