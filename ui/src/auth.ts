@@ -10,6 +10,7 @@ if (process.env.GITHUB_CLIENT_ID) {
     GitHubProvider({
       clientId: process.env.GITHUB_CLIENT_ID,
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      checks: ["none"],
     })
   )
 } else {
@@ -34,6 +35,7 @@ if (process.env.GITHUB_CLIENT_ID) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
+  trustHost: true,
   callbacks: {
     async jwt({ token, account }) {
       if (account) {
