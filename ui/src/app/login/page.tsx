@@ -6,18 +6,12 @@ export const dynamic = "force-dynamic"
 export default function LoginPage() {
   return (
     <div className="fixed inset-y-0 right-0 left-60 flex items-center justify-center overflow-hidden bg-black z-0">
-      {/* Background Image */}
-      <div className="absolute inset-0 z-0">
-        <Image
-          src="/devops_bg.png"
-          alt="DevOps and Cloud Computing Background"
-          fill
-          priority
-          unoptimized
-          className="object-cover opacity-80"
-        />
-        {/* Subtle dark gradient overlay to ensure text readability */}
-        <div className="absolute inset-0 bg-gradient-to-br from-black/60 to-black/30" />
+      {/* Premium CSS Gradient Background instead of image */}
+      <div className="absolute inset-0 z-0 bg-slate-950">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-purple-500/10 to-transparent" />
+        <div className="absolute top-0 -left-4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-blob" />
+        <div className="absolute top-0 -right-4 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-blob" style={{ animationDelay: "2000ms" }} />
+        <div className="absolute -bottom-8 left-20 w-96 h-96 bg-pink-500 rounded-full mix-blend-multiply filter blur-[128px] opacity-40 animate-blob" style={{ animationDelay: "4000ms" }} />
       </div>
 
       {/* Glassmorphism Card */}
