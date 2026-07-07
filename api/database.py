@@ -90,17 +90,26 @@ def get_or_create_user(user_id: str, email: str = None) -> dict:
     with get_connection() as conn:
         try:
             with conn.cursor(cursor_factory=DictCursor) as cur:
-                cur.execute("SELECT id, role FROM users WHERE id = %s", (user_id,))
+                cur.execute("SELECT id, role, email FROM users WHERE id = %s", (user_id,))
                 user = cur.fetchone()
+                ADMIN_EMAILS = {"jeneeldumasia18@gmail.com", "jeneel.dumasia@iamops.io"}
+                
                 if user:
-                    return dict(user)
+                    user_dict = dict(user)
+                    # Upgrade existing user to admin if they are in the admin emails list
+                    if user_dict['role'] != 'admin' and (email in ADMIN_EMAILS or user_dict.get('email') in ADMIN_EMAILS):
+                        cur.execute("UPDATE users SET role = 'admin' WHERE id = %s", (user_id,))
+                        user_dict['role'] = 'admin'
+                    return user_dict
 
                 # Fix 11: get_or_create_user has a TOCTOU race condition
                 # Use an advisory lock to prevent race condition during initial admin creation
                 cur.execute("SELECT pg_advisory_xact_lock(hashtext('users_insert_lock'));")
                 cur.execute("SELECT COUNT(*) FROM users")
                 count = cur.fetchone()[0]
-                role = 'admin' if count == 0 else 'user'
+                
+                ADMIN_EMAILS = {"jeneeldumasia18@gmail.com", "jeneel.dumasia@iamops.io"}
+                role = 'admin' if count == 0 or email in ADMIN_EMAILS else 'user'
 
                 cur.execute(
                     "INSERT INTO users (id, email, role) VALUES (%s, %s, %s) RETURNING id, role",
