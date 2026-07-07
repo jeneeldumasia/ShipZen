@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic"
 
 export default function LoginPage() {
   return (
-    <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-black">
+    <div className="fixed inset-y-0 right-0 left-60 flex items-center justify-center overflow-hidden bg-black z-0">
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
