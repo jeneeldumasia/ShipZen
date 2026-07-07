@@ -56,6 +56,18 @@ spec:
                 secretKeyRef:
                   name: shipzen-s3-config
                   key: bucket_name
+            - name: GITHUB_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: shipzen-github-app
+                  key: app_id
+                  optional: true
+            - name: GITHUB_APP_PRIVATE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: shipzen-github-app
+                  key: private_key
+                  optional: true
           resources:
             requests:
               cpu: "100m"

@@ -28,6 +28,58 @@ from metrics import (
     shipzen_deployments_total
 )
 
+def get_github_app_token(repo_url: str) -> str:
+    app_id = os.environ.get("GITHUB_APP_ID")
+    private_key = os.environ.get("GITHUB_APP_PRIVATE_KEY")
+    if not app_id or not private_key or not repo_url.startswith("https://github.com/"):
+        return None
+    
+    try:
+        # Parse owner/repo from URL
+        parts = repo_url.rstrip("/").split("/")
+        owner, repo = parts[-2], parts[-1]
+        if repo.endswith(".git"):
+            repo = repo[:-4]
+
+        import jwt
+        import requests
+        
+        now = int(time.time())
+        payload = {
+            "iat": now - 60,
+            "exp": now + (10 * 60),
+            "iss": app_id
+        }
+        
+        # Format the private key if it was passed without newlines
+        if "\\n" in private_key:
+            private_key = private_key.replace("\\n", "\n")
+            
+        encoded_jwt = jwt.encode(payload, private_key, algorithm="RS256")
+        
+        # 1. Get Installation ID for this repo
+        headers = {
+            "Authorization": f"Bearer {encoded_jwt}",
+            "Accept": "application/vnd.github.v3+json"
+        }
+        resp = requests.get(f"https://api.github.com/repos/{owner}/{repo}/installation", headers=headers, timeout=10)
+        if resp.status_code != 200:
+            logger.warning(f"Could not find GitHub App installation for {owner}/{repo}: {resp.status_code} {resp.text}")
+            return None
+            
+        installation_id = resp.json()["id"]
+        
+        # 2. Create Installation Access Token
+        token_resp = requests.post(f"https://api.github.com/app/installations/{installation_id}/access_tokens", headers=headers, timeout=10)
+        if token_resp.status_code != 201:
+            logger.warning(f"Failed to create GitHub App installation token: {token_resp.status_code} {token_resp.text}")
+            return None
+            
+        return token_resp.json()["token"]
+    except Exception as e:
+        logger.error(f"Error fetching GitHub App token: {e}")
+        return None
+
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('worker')
@@ -283,11 +335,17 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
     # Fix 8: Workspace directory leaks on clone failure, moved creation inside try and cleanup to finally
     workspace = f"/tmp/workspace_{deployment_id}"
     try:
+        clone_url = repo_url
+        if repo_url.startswith("https://github.com/"):
+            token = get_github_app_token(repo_url)
+            if token:
+                clone_url = clone_url.replace("https://github.com/", f"https://x-access-token:{token}@github.com/")
+
         # Shallow clone to detect builder
         os.makedirs(workspace, exist_ok=True)
         # Fix 9: Git clone in worker has no timeout
         subprocess.run(["git", "clone", "--depth=1", "--branch",
-                       branch, repo_url, workspace], check=True, timeout=120)
+                       branch, clone_url, workspace], check=True, timeout=120)
 
         # Check overrides
         overrides = {}
@@ -361,7 +419,7 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
             # Non-fatal — the build may still succeed if the repo was created externally
 
         manifest = selected_builder.generate_job_manifest(
-            deployment_id, repo_url, branch, image_name, overrides)
+            deployment_id, clone_url, branch, image_name, overrides)
         job_name = manifest["metadata"]["name"]
 
         # Create Job
