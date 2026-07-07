@@ -9,8 +9,8 @@ export default function LoginPage() {
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <Image
-          src="/auth_bg.png"
-          alt="Abstract 3D Mesh Background"
+          src="/devops_bg.png"
+          alt="DevOps and Cloud Computing Background"
           fill
           priority
           unoptimized
