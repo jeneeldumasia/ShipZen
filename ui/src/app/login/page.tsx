@@ -1,6 +1,8 @@
 import { signIn } from "@/auth"
 import Image from "next/image"
 
+export const dynamic = "force-dynamic"
+
 export default function LoginPage() {
   return (
     <div className="relative flex h-screen w-full items-center justify-center overflow-hidden bg-black">
