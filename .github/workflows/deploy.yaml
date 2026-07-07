@@ -28,7 +28,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
 
       - name: Setup Terraform
@@ -45,7 +45,7 @@ jobs:
       - name: Cleanup Stuck Webhooks
         working-directory: ./terraform
         run: |
-          aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster || true
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION || 'us-east-1' }} --name shipzen-cluster || true
           # Only delete specific webhooks known to cause stuck ArgoCD syncs.
           # Do NOT use --all: that would delete Kyverno and cert-manager webhooks too.
           # shipzen-platform-webhook: ArgoCD application webhook that sometimes sticks post-deploy.
@@ -61,7 +61,7 @@ jobs:
         run: |
           ROLE_ARN="arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID || '952994886652' }}:role/ShipZen-AA-SuperRole"
           CLUSTER="shipzen-cluster"
-          REGION="${{ vars.AWS_REGION || 'us-east-1' }}"
+          REGION="${{ env.AWS_REGION || 'us-east-1' }}"
 
           echo "Ensuring EKS access entry exists for $ROLE_ARN..."
           aws eks create-access-entry \
@@ -89,7 +89,7 @@ jobs:
         run: terraform plan -out=tfplan
 
       - name: Configure kubectl
-        run: aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster
+        run: aws eks update-kubeconfig --region ${{ env.AWS_REGION || 'us-east-1' }} --name shipzen-cluster
         continue-on-error: true
 
       - name: Terraform Apply

@@ -20,7 +20,7 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -36,7 +36,7 @@ jobs:
 
       - name: Configure kubectl
         run: |
-          aws eks update-kubeconfig --region ${{ vars.AWS_REGION || 'us-east-1' }} --name shipzen-cluster || echo "cluster_not_found=true" >> $GITHUB_ENV
+          aws eks update-kubeconfig --region ${{ env.AWS_REGION || 'us-east-1' }} --name shipzen-cluster || echo "cluster_not_found=true" >> $GITHUB_ENV
 
       # Step 1: Suspend ArgoCD auto-sync FIRST.
       # If we skip this, ArgoCD's selfHeal will re-create every resource
