@@ -96,7 +96,10 @@ s3 = boto3.client('s3')
 S3_LOG_BUCKET = os.environ.get("S3_LOG_BUCKET", "")
 
 # Limit concurrent monitoring threads to prevent unbounded thread exhaustion
-_executor = ThreadPoolExecutor(max_workers=20)
+import threading
+MAX_WORKERS = 20
+_executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+_semaphore = threading.Semaphore(MAX_WORKERS)
 
 
 def get_db_conn():
@@ -292,6 +295,7 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
             pass
         if queue and message_id:
             queue.ack_message(message_id)
+        _semaphore.release()
 
 
 def process_message(queue: QueueClient, state_machine: StateMachine, message_id: str, data: dict):
@@ -343,9 +347,9 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
 
         # Shallow clone to detect builder
         os.makedirs(workspace, exist_ok=True)
-        # Fix 9: Git clone in worker has no timeout
-        subprocess.run(["git", "clone", "--depth=1", "--branch",
+        subprocess.run(["git", "clone", "--depth=1", "--filter=blob:none", "--sparse", "--branch",
                        branch, clone_url, workspace], check=True, timeout=120)
+        subprocess.run(["git", "sparse-checkout", "set", "shipzen.yaml", "Dockerfile", "Cargo.toml", "bun.lockb", "package.json"], cwd=workspace, check=True)
 
         # Check overrides
         overrides = {}
@@ -439,6 +443,7 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
             selected_builder, 'name') else type(selected_builder).__name__
         project_id_db = deployment.get(
             "project_id", "unknown") if deployment else "unknown"
+        _semaphore.acquire()
         _executor.submit(monitor_job, job_name, deployment_id, image_name, state_machine, builder_type, project_id_db, queue, message_id)
 
     except Exception as e:

@@ -11,7 +11,7 @@ data:
       "uid": "platform-health",
       "title": "Platform Health",
       "panels": [
-        {"title": "Queue Depth", "type": "timeseries", "targets": [{"expr": "shipzen_queue_depth"}]},
+        {"title": "Messages in Flight", "type": "timeseries", "targets": [{"expr": "shipzen_messages_in_flight"}]},
         {"title": "DLQ Depth", "type": "timeseries", "targets": [{"expr": "shipzen_dlq_depth"}]},
         {"title": "Retry Rate (5m)", "type": "timeseries", "targets": [{"expr": "rate(shipzen_retry_total[5m])"}]},
         {"title": "Reconciliation Duration", "type": "timeseries", "targets": [{"expr": "shipzen_reconciliation_duration_seconds"}]},
@@ -23,11 +23,11 @@ data:
       "uid": "build-performance",
       "title": "Build Performance",
       "panels": [
-        {"title": "Build Duration p95", "type": "stat", "targets": [{"expr": "job:build_duration_seconds:p95:1h"}]},
+        {"title": "Build Duration p95", "type": "stat", "targets": [{"expr": "histogram_quantile(0.95, sum by(le) (rate(shipzen_build_duration_seconds_bucket[1h])))"}]},
         {"title": "Build Duration p50", "type": "stat", "targets": [{"expr": "histogram_quantile(0.50, sum by(le) (rate(shipzen_build_duration_seconds_bucket[1h])))"}]},
         {"title": "Build Success Rate", "type": "timeseries", "targets": [{"expr": "rate(shipzen_deployment_success_total[1h])"}]},
         {"title": "Build Failure Rate", "type": "timeseries", "targets": [{"expr": "rate(shipzen_deployment_failure_total[1h])"}]},
-        {"title": "Active Builder Pods", "type": "stat", "targets": [{"expr": "kube_deployment_status_replicas_ready{deployment=\"shipzen-builder\"}"}]}
+        {"title": "Active Builder Jobs", "type": "stat", "targets": [{"expr": "sum(kube_job_status_active{namespace=~\"shipzen-builder.*\"})"}]}
       ]
     }
   project-resources.json: |-

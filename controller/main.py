@@ -74,13 +74,22 @@ def ensure_ecr_repository(project_id: str):
         logger.error(f"Failed to ensure ECR repository exists: {e}")
 
 
+from psycopg2.pool import ThreadedConnectionPool
+db_pool = None
+
 def get_db_connection():
-    conn = psycopg2.connect(DATABASE_URL)
-    # Fix #25: autocommit = False so PROVISIONING → READY transitions are
-    # atomic. A crash after apply_manifests() but before the UPDATE will
-    # roll back, leaving the project in PROVISIONING for the next loop.
+    global db_pool
+    if db_pool is None:
+        db_pool = ThreadedConnectionPool(1, 20, DATABASE_URL)
+    conn = db_pool.getconn()
     conn.autocommit = False
     return conn
+
+def close_db_connection(conn):
+    if db_pool:
+        db_pool.putconn(conn)
+    else:
+        conn.close()
 
 
 def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
@@ -96,7 +105,7 @@ def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
             conn = get_db_connection()
             with conn.cursor() as cur:
                 cur.execute("SELECT 1 FROM projects LIMIT 1;")
-            conn.close()
+            close_db_connection(conn)
             logger.info("Database schema is ready.")
             return
         except psycopg2.OperationalError as e:
@@ -219,7 +228,7 @@ def reconcile():
             cur.execute("SELECT * FROM projects;")
             projects = [dict(row) for row in cur.fetchall()]
     finally:
-        conn.close()
+        close_db_connection(conn)
 
     for row in projects:
         project_data = dict(row)
@@ -301,11 +310,11 @@ def reconcile():
                         )
                     err_conn.commit()
                 finally:
-                    err_conn.close()
+                    close_db_connection(err_conn)
             except Exception as rb_err:
                 logger.error(f"Failed to set FAILED state: {rb_err}")
         finally:
-            project_conn.close()
+            close_db_connection(project_conn)
 
 
 def reconcile_deployments(conn, cur, project):

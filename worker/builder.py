@@ -15,7 +15,7 @@ def get_ecr_credentials():
         ecr_token = base64.b64decode(token_resp).decode('utf-8').split(':')[1]
         return token_resp, ecr_token
     except Exception as e:
-        print(f"Warning: Failed to fetch ECR token: {e}")
+        logger.warning(f"Warning: Failed to fetch ECR token: {e}")
         return "", ""
 
 
@@ -254,9 +254,11 @@ fi
                         "containers": [
                             {
                                 "name": "pack",
-                                "image": "docker:24-dind",
+                                "image": "docker:24-dind-rootless",
                                 "securityContext": {
-                                    "privileged": True
+                                    "privileged": False,
+                                    "runAsUser": 1000,
+                                    "seccompProfile": {"type": "Unconfined"}
                                 },
                                 "env": env_vars,
                                 "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],

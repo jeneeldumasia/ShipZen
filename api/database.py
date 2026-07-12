@@ -109,7 +109,7 @@ def get_or_create_user(user_id: str, email: str = None) -> dict:
                 count = cur.fetchone()[0]
                 
                 ADMIN_EMAILS = {"jeneeldumasia18@gmail.com", "jeneel.dumasia@iamops.io"}
-                role = 'admin' if count == 0 or email in ADMIN_EMAILS else 'user'
+                role = 'admin' if email in ADMIN_EMAILS else 'user'
 
                 cur.execute(
                     "INSERT INTO users (id, email, role) VALUES (%s, %s, %s) RETURNING id, role",

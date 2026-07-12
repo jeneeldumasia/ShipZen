@@ -17,7 +17,7 @@ ShipZen empowers development teams to deploy source code directly to a secure, i
 ### Technology Stack
 - **Frontend**: Next.js 14, Tailwind CSS, TypeScript
 - **Backend / Workers**: Python, FastAPI, Psycopg2, Redis
-- **Infrastructure**: Terraform, Amazon EKS (Kubernetes 1.30+), Karpenter (Auto-scaling)
+- **Infrastructure**: Terraform, Amazon EKS (Kubernetes 1.36+), Karpenter (Auto-scaling)
 - **Networking**: Envoy Gateway API, ExternalDNS, cert-manager
 - **Observability**: Prometheus, Grafana, Node Exporter
 

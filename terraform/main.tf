@@ -230,11 +230,11 @@ resource "kubernetes_namespace" "shipzen_build" {
   metadata {
     name = "shipzen-build"
     labels = {
-      "pod-security.kubernetes.io/enforce"         = "privileged"
+      "pod-security.kubernetes.io/enforce"         = "baseline"
       "pod-security.kubernetes.io/enforce-version" = "latest"
-      "pod-security.kubernetes.io/warn"            = "privileged"
+      "pod-security.kubernetes.io/warn"            = "baseline"
       "pod-security.kubernetes.io/warn-version"    = "latest"
-      "pod-security.kubernetes.io/audit"           = "privileged"
+      "pod-security.kubernetes.io/audit"           = "baseline"
       "pod-security.kubernetes.io/audit-version"   = "latest"
     }
   }
@@ -324,8 +324,10 @@ data "aws_iam_policy_document" "github_actions_policy" {
     sid     = "TerraformEKSManage"
     effect  = "Allow"
     actions = [
-      "eks:*",
-      "ec2:*",
+      "eks:Describe*",
+      "eks:Update*",
+      "eks:List*",
+      "ec2:Describe*",
       "iam:GetRole", "iam:CreateRole", "iam:DeleteRole",
       "iam:AttachRolePolicy", "iam:DetachRolePolicy",
       "iam:PutRolePolicy", "iam:DeleteRolePolicy",
