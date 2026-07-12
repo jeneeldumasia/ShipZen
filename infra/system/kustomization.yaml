@@ -17,4 +17,4 @@ resources:
   - grafana-dashboards.yaml
   - ecr-token-rotator-sa.yaml
   - ecr-token-rotator.yaml
-  - ui-auth-external-secret.yaml
+  - github-app-secret.yaml

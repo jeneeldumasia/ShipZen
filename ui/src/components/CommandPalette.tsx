@@ -79,6 +79,12 @@ export function CommandPalette() {
               >
                 <Terminal size={18} /> Dashboard
               </Command.Item>
+              <Command.Item 
+                onSelect={() => { setOpen(false); router.push("/admin"); }}
+                className="flex items-center gap-3 px-4 py-4 text-base font-bold text-text-primary cursor-pointer aria-selected:bg-text-primary aria-selected:text-canvas-bg transition-colors"
+              >
+                <Terminal size={18} /> Admin Console
+              </Command.Item>
             </Command.Group>
 
             {projects.length > 0 && (
