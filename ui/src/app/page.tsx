@@ -24,7 +24,7 @@ export default async function DashboardPage() {
   if (hour < 12) greeting = "Good morning";
   else if (hour < 18) greeting = "Good afternoon";
 
-  const allReady = projects.every(p => p.status === "Ready" || p.status === "Success");
+  const allReady = projects.every(p => p.status === "Ready");
   const systemStatus = allReady ? "All systems are breathing." : "Systems are active.";
 
   return (
