@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth, signOut } from "@/auth";
-import { Terminal, LayoutDashboard, Settings, LogOut } from "lucide-react";
+import { Terminal, LayoutDashboard, Settings, LogOut, UserRound } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
 export async function Navigation() {
@@ -10,7 +10,7 @@ export async function Navigation() {
   const user = session.user as any;
   const initials = user?.name
     ? user.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2)
-    : user?.email?.[0]?.toUpperCase() ?? "?";
+    : user?.email?.[0]?.toUpperCase() ?? null;
 
   return (
     <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50">
@@ -51,9 +51,9 @@ export async function Navigation() {
         <div className="flex items-center gap-1">
           <div
             className="w-7 h-7 rounded-full bg-brand/10 dark:bg-brand/30 border border-brand/40 dark:border-brand/50 flex items-center justify-center text-[11px] font-bold text-brand"
-            title={user?.email}
+            title={user?.email ?? "Signed in"}
           >
-            {initials}
+            {initials ?? <UserRound size={13} />}
           </div>
           <form
             action={async () => {

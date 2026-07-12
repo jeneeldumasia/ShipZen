@@ -1481,6 +1481,51 @@ def list_global_audit_logs(request: Request, limit: int = Query(50, le=200), cur
         logger.error(f"Failed to fetch global audit logs: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
+
+@app.get("/admin/deployments", tags=["Admin"])
+@limiter.limit("100/minute")
+def list_global_deployments(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: Optional[str] = Query(default=None, description="cursor format: <updated_at>|<deployment_id>"),
+    current_user: User = Depends(get_current_user)
+):
+    """List all deployments across the platform, with project and owner info."""
+    if not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    query = """
+        SELECT d.deployment_id, d.project_id, d.repo_url, d.image_uri,
+               d.replicas, d.port, d.state, d.updated_at, d.last_error,
+               p.name AS project_name, p.namespace AS project_namespace,
+               u.email AS owner_email
+        FROM deployments d
+        JOIN projects p ON d.project_id = p.id
+        LEFT JOIN users u ON p.owner_id = u.id
+    """
+    params: list = []
+
+    if cursor:
+        try:
+            cursor_updated_at, cursor_deployment_id = cursor.split("|", 1)
+            query += " WHERE (d.updated_at, d.deployment_id) < (%s, %s)"
+            params.extend([cursor_updated_at, cursor_deployment_id])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor format")
+
+    query += " ORDER BY d.updated_at DESC, d.deployment_id DESC LIMIT %s;"
+    params.append(limit)
+
+    try:
+        with get_connection() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                cur.execute(query, tuple(params))
+                return [_serialize(dict(r)) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"Failed to list global deployments: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list global deployments")
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 
@@ -1539,10 +1584,8 @@ import datetime
 @limiter.limit("5/minute")
 def restart_deployment(request: Request, project_id: str, deployment_id: str, current_user: User = Depends(get_current_user)):
     """Restart a deployment by patching its pod template with a new restartedAt annotation."""
-    project = verify_project_access(project_id, current_user.user_id, "viewer")
-    deployment = _get_deployment_or_404(deployment_id)
-    if deployment["project_id"] != project_id:
-        raise HTTPException(status_code=404, detail="Deployment not found in this project")
+    project = verify_project_access(project_id, current_user)
+    deployment = _get_deployment_or_404(project_id, deployment_id)
     
     deployment_name = f"{deployment_id[:8]}-{project['name']}"
     now_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
