@@ -67,7 +67,8 @@ export default async function DeploymentPage({ params }: { params: { id: string;
   const isActive = ["Queued", "Building", "Deploying", "Verifying"].includes(deployment.state);
   const needsLiveUpdates = isActive;
   const shortId = deployment.deployment_id.slice(0, 8);
-  const appUrl = `http://${shortId}-${project.name}-${process.env.NEXT_PUBLIC_APP_DOMAIN}`;
+  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
+  const appUrl = appDomain ? `http://${shortId}-${project.name}.${appDomain}` : `http://localhost:${deployment.port}`;
 
   return (
     <div className="w-full animate-fade-in relative">
@@ -104,7 +105,7 @@ export default async function DeploymentPage({ params }: { params: { id: string;
 
       {/* Error state */}
       {deployment.state === "Failed" && deployment.last_error && (
-        <div className="max-w-2xl mx-auto mt-8 p-6 border border-red-900 bg-red-950/20 text-red-500 font-mono text-sm">
+        <div className="max-w-2xl mx-auto mt-8 p-6 border border-red-500/20 bg-red-500/10 text-red-600 dark:text-red-400 font-mono text-sm">
           <div className="flex items-center gap-2 mb-2 font-bold uppercase tracking-widest text-xs">
             <Terminal size={14} /> Critical Failure
           </div>
@@ -114,7 +115,7 @@ export default async function DeploymentPage({ params }: { params: { id: string;
 
       {/* Live Cinematic Logs */}
       {isActive && (
-        <div className="max-w-4xl mx-auto mt-16 opacity-50 hover:opacity-100 transition-opacity duration-500">
+        <div className="max-w-4xl mx-auto mt-16 opacity-100 transition-opacity duration-500">
           <LiveLogPanel
             projectId={params.id}
             deploymentId={params.depId}

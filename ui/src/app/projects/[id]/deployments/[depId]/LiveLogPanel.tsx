@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Terminal, Wifi, WifiOff } from "lucide-react";
+import { getWsBaseUrl } from "@/lib/api";
 
 const ANSI_RE = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
 
@@ -26,8 +27,7 @@ export function LiveLogPanel({ projectId, deploymentId, token }: Props) {
   useEffect(() => {
     if (!token) return;
 
-    const wsUrl = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
-      .replace(/^http/, "ws");
+    const wsUrl = getWsBaseUrl();
 
     const ws = new WebSocket(
       `${wsUrl}/ws/projects/${projectId}/deployments/${deploymentId}/logs?token=${token}`
@@ -38,7 +38,7 @@ export function LiveLogPanel({ projectId, deploymentId, token }: Props) {
 
     ws.onmessage = (e: MessageEvent) => {
       const line = (e.data as string).replace(ANSI_RE, "");
-      setLines((prev) => [...prev, line]);
+      setLines((prev) => [...prev, line].slice(-50));
     };
 
     ws.onerror = () => {

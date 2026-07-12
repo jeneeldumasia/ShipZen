@@ -732,13 +732,16 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
         main_task = asyncio.current_task()
 
         async def ping():
-            while True:
-                await asyncio.sleep(30)
-                try:
-                    await websocket.send_json({"type": "ping"})
-                except Exception:
-                    main_task.cancel()
-                    break
+            try:
+                while True:
+                    await asyncio.sleep(30)
+                    try:
+                        await websocket.send_json({"type": "ping"})
+                    except Exception:
+                        main_task.cancel()
+                        break
+            except asyncio.CancelledError:
+                pass
         ping_task = asyncio.create_task(ping())
 
         async for message in pubsub.listen():
@@ -820,13 +823,16 @@ async def websocket_deployment_logs(
         main_task = asyncio.current_task()
 
         async def ping():
-            while True:
-                await asyncio.sleep(30)
-                try:
-                    await websocket.send_text("ping")
-                except Exception:
-                    main_task.cancel()
-                    break
+            try:
+                while True:
+                    await asyncio.sleep(30)
+                    try:
+                        await websocket.send_text("ping")
+                    except Exception:
+                        main_task.cancel()
+                        break
+            except asyncio.CancelledError:
+                pass
         ping_task = asyncio.create_task(ping())
 
         async for message in pubsub.listen():

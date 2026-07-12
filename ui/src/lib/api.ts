@@ -4,22 +4,30 @@
  * backend API server — this keeps the backend URL server-side only.
  */
 
-let BASE = "http://localhost:8000";
-if (typeof window !== "undefined") {
-  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-    BASE = "http://localhost:8000";
-  } else if (window.location.hostname === "shipzen.jeneeldumasia.codes") {
-    BASE = "https://shipzen.jeneeldumasia.codes/api/v1";
+export function getBaseUrl(): string {
+  if (typeof window !== "undefined") {
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return "http://localhost:8000";
+    } else if (window.location.hostname === "shipzen.jeneeldumasia.codes") {
+      return "https://shipzen.jeneeldumasia.codes/api/v1";
+    } else {
+      return "https://api." + window.location.hostname;
+    }
   } else {
-    BASE = "https://api." + window.location.hostname;
-  }
-} else {
-  if (process.env.KUBERNETES_SERVICE_HOST) {
-    BASE = "http://shipzen-api.shipzen-system.svc.cluster.local:80";
-  } else {
-    BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    if (process.env.KUBERNETES_SERVICE_HOST) {
+      return "http://shipzen-api.shipzen-system.svc.cluster.local:80";
+    } else {
+      return process.env.API_URL ?? "http://localhost:8000";
+    }
   }
 }
+
+export function getWsBaseUrl(): string {
+  return getBaseUrl().replace(/^http/, "ws");
+}
+
+let BASE = getBaseUrl();
+
 async function request<T>(
   path: string,
   options: RequestInit = {}

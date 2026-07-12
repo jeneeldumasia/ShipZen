@@ -93,7 +93,7 @@ export default function NewDeploymentPage() {
 
       <form onSubmit={handleSubmit} className="card p-6 space-y-5">
         {error && (
-          <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+          <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-lg">
             <span className="mt-0.5">⚠</span>
             {error}
           </div>
@@ -172,7 +172,7 @@ export default function NewDeploymentPage() {
           </button>
 
           {showAdvanced && (
-            <div className="mt-4 pt-4 border-t border-slate-100 space-y-4 animate-fade-in">
+            <div className="mt-4 pt-4 border-t border-canvas-border space-y-4 animate-fade-in">
               <div>
                 <label className="block text-sm font-medium text-text-primary mb-1.5">Container Port</label>
                 <input
@@ -185,7 +185,7 @@ export default function NewDeploymentPage() {
                 />
                 <p className="text-xs text-text-secondary mt-1.5">
                   The port your app listens on. Defaults to 8080.
-                  Can also be set via <code className="bg-slate-100 px-1 rounded">shipzen.yaml</code> in your repo.
+                  Can also be set via <code className="bg-canvas-border px-1 rounded">shipzen.yaml</code> in your repo.
                 </p>
               </div>
             </div>

@@ -2,9 +2,10 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { Server } from "lucide-react";
 import Link from "next/link";
+import { getBaseUrl } from "@/lib/api";
 
 async function getGlobalDeployments(token: string) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/deployments`, {
+  const res = await fetch(`${getBaseUrl()}/admin/deployments`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store"
   });

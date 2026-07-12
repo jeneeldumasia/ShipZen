@@ -3,19 +3,26 @@
 import { useState } from "react";
 import { RefreshCw, ServerCrash } from "lucide-react";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 export function SystemControls() {
   const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const handleRestart = async () => {
-    if (!window.confirm("Are you sure you want to restart the ShipZen system pods? This will cause a brief disruption.")) return;
+    if (!confirming) {
+      setConfirming(true);
+      setTimeout(() => setConfirming(false), 3000);
+      return;
+    }
     
     try {
       setLoading(true);
+      setConfirming(false);
       await api.admin.restartSystem();
-      alert("System pods are restarting. They will be back online shortly.");
+      toast.success("System pods are restarting. They will be back online shortly.");
     } catch (err: any) {
-      alert(err.message || "Failed to restart system pods");
+      toast.error(err.message || "Failed to restart system pods");
     } finally {
       setLoading(false);
     }
@@ -43,7 +50,7 @@ export function SystemControls() {
           ) : (
             <RefreshCw size={16} />
           )}
-          {loading ? "Restarting..." : "Restart System Pods"}
+          {loading ? "Restarting..." : confirming ? "Click again to confirm" : "Restart System Pods"}
         </button>
       </div>
     </div>

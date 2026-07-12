@@ -1,0 +1,722 @@
+﻿apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"argoproj.io/v1alpha1","kind":"Application","metadata":{"annotations":{},"name":"shipzen-platform","namespace":"argocd"},"spec":{"destination":{"namespace":"shipzen-system","server":"https://kubernetes.default.svc"},"ignoreDifferences":[{"group":"apps","jsonPointers":["/spec/replicas"],"kind":"Deployment","name":"shipzen-builder","namespace":"shipzen-build"}],"project":"default","source":{"path":"infra","repoURL":"https://github.com/jeneeldumasia/ShipZen.git","targetRevision":"HEAD"},"syncPolicy":{"automated":{"prune":true,"selfHeal":true},"syncOptions":["RespectIgnoreDifferences=true"]}}}
+  creationTimestamp: "2026-06-22T21:19:43Z"
+  generation: 329
+  name: shipzen-platform
+  namespace: argocd
+  resourceVersion: "95448"
+  uid: abe1c66c-0bbc-4040-90ee-16ce414dac00
+operation:
+  initiatedBy:
+    automated: true
+  retry:
+    limit: 5
+  sync:
+    prune: true
+    revision: HEAD
+    source:
+      path: infra
+      repoURL: https://github.com/jeneeldumasia/ShipZen.git
+      targetRevision: HEAD
+    syncOptions:
+    - RespectIgnoreDifferences=true
+spec:
+  destination:
+    namespace: shipzen-system
+    server: https://kubernetes.default.svc
+  ignoreDifferences:
+  - group: apps
+    jsonPointers:
+    - /spec/replicas
+    kind: Deployment
+    name: shipzen-builder
+    namespace: shipzen-build
+  project: default
+  source:
+    path: infra
+    repoURL: https://github.com/jeneeldumasia/ShipZen.git
+    targetRevision: HEAD
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+    - RespectIgnoreDifferences=true
+status:
+  controllerNamespace: argocd
+  health:
+    lastTransitionTime: "2026-06-22T23:28:35Z"
+    status: Degraded
+  operationState:
+    finishedAt: "2026-06-23T00:20:05Z"
+    message: 'one or more synchronization tasks completed unsuccessfully. Retrying
+      attempt #4 at 12:20AM.'
+    operation:
+      initiatedBy:
+        automated: true
+      retry:
+        limit: 5
+      sync:
+        prune: true
+        revision: c59fc78cd2fe8406d7ddd16f8c8e19128dbf6eb2
+        source:
+          path: infra
+          repoURL: https://github.com/jeneeldumasia/ShipZen.git
+          targetRevision: HEAD
+        syncOptions:
+        - RespectIgnoreDifferences=true
+    phase: Running
+    retryCount: 4
+    startedAt: "2026-06-22T23:28:32Z"
+    syncResult:
+      resources:
+      - group: ""
+        hookPhase: Succeeded
+        kind: Namespace
+        message: namespace/shipzen-system unchanged
+        name: shipzen-system
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: networking.k8s.io
+        hookPhase: Succeeded
+        kind: NetworkPolicy
+        message: networkpolicy.networking.k8s.io/api-server-egress unchanged
+        name: api-server-egress
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: policy
+        hookPhase: Succeeded
+        kind: PodDisruptionBudget
+        message: PodDisruptionBudget has InsufficientPods
+        name: shipzen-controller-pdb
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: policy
+        hookPhase: Succeeded
+        kind: PodDisruptionBudget
+        message: PodDisruptionBudget has InsufficientPods
+        name: shipzen-worker-pdb
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: ServiceAccount
+        message: serviceaccount/shipzen-controller-sa unchanged
+        name: shipzen-controller-sa
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: ServiceAccount
+        message: serviceaccount/shipzen-worker-sa unchanged
+        name: shipzen-worker-sa
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: ServiceAccount
+        message: serviceaccount/shipzen-api-sa unchanged
+        name: shipzen-api-sa
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: ConfigMap
+        message: configmap/shipzen-schema unchanged
+        name: shipzen-schema
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: ConfigMap
+        message: configmap/grafana-dashboards unchanged
+        name: grafana-dashboards
+        namespace: observability
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: rbac.authorization.k8s.io
+        hookPhase: Succeeded
+        kind: ClusterRole
+        message: clusterrole.rbac.authorization.k8s.io/shipzen-controller reconciled.
+          clusterrole.rbac.authorization.k8s.io/shipzen-controller unchanged
+        name: shipzen-controller
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: rbac.authorization.k8s.io
+        hookPhase: Succeeded
+        kind: ClusterRoleBinding
+        message: clusterrolebinding.rbac.authorization.k8s.io/shipzen-controller reconciled.
+          clusterrolebinding.rbac.authorization.k8s.io/shipzen-controller unchanged
+        name: shipzen-controller
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: rbac.authorization.k8s.io
+        hookPhase: Succeeded
+        kind: Role
+        message: role.rbac.authorization.k8s.io/shipzen-worker-role reconciled. role.rbac.authorization.k8s.io/shipzen-worker-role
+          unchanged
+        name: shipzen-worker-role
+        namespace: shipzen-build
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: rbac.authorization.k8s.io
+        hookPhase: Succeeded
+        kind: RoleBinding
+        message: rolebinding.rbac.authorization.k8s.io/shipzen-worker-rolebinding
+          reconciled. rolebinding.rbac.authorization.k8s.io/shipzen-worker-rolebinding
+          unchanged
+        name: shipzen-worker-rolebinding
+        namespace: shipzen-build
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: Service
+        message: service/shipzen-ui unchanged
+        name: shipzen-ui
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: Service
+        message: service/shipzen-worker-metrics unchanged
+        name: shipzen-worker-metrics
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: Service
+        message: service/shipzen-controller-metrics unchanged
+        name: shipzen-controller-metrics
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: Service
+        message: service/shipzen-api unchanged
+        name: shipzen-api
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: ""
+        hookPhase: Succeeded
+        kind: Service
+        message: service/shipzen-api-metrics unchanged
+        name: shipzen-api-metrics
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: apps
+        hookPhase: Failed
+        images:
+        - ghcr.io/jeneeldumasia/shipzen-worker:sha-2d7fe42
+        kind: Deployment
+        message: Deployment "shipzen-worker" exceeded its progress deadline
+        name: shipzen-worker
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: apps
+        hookPhase: Succeeded
+        images:
+        - ghcr.io/jeneeldumasia/shipzen-api:sha-2d7fe42
+        kind: Deployment
+        message: deployment.apps/shipzen-api unchanged
+        name: shipzen-api
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: apps
+        hookPhase: Succeeded
+        images:
+        - ghcr.io/jeneeldumasia/shipzen-ui:sha-2d7fe42
+        kind: Deployment
+        message: deployment.apps/shipzen-ui unchanged
+        name: shipzen-ui
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: apps
+        hookPhase: Succeeded
+        images:
+        - ghcr.io/jeneeldumasia/shipzen-controller:sha-2d7fe42
+        kind: Deployment
+        message: deployment.apps/shipzen-controller configured
+        name: shipzen-controller
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: autoscaling
+        hookPhase: Succeeded
+        kind: HorizontalPodAutoscaler
+        message: the HPA controller was able to get the target's current scale
+        name: shipzen-controller-hpa
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v2
+      - group: batch
+        hookPhase: Succeeded
+        images:
+        - amazon/aws-cli:latest
+        kind: CronJob
+        message: The CronJob never completed successfully. It may not be healthy
+        name: ecr-token-rotator
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: gateway.envoyproxy.io
+        hookPhase: Succeeded
+        kind: EnvoyProxy
+        message: envoyproxy.gateway.envoyproxy.io/aws-nlb-proxy unchanged
+        name: aws-nlb-proxy
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1alpha1
+      - group: karpenter.sh
+        hookPhase: Succeeded
+        kind: NodePool
+        message: nodepool.karpenter.sh/builder-pool unchanged
+        name: builder-pool
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: gateway.networking.k8s.io
+        hookPhase: Succeeded
+        kind: GatewayClass
+        message: gatewayclass.gateway.networking.k8s.io/envoy-gateway unchanged
+        name: envoy-gateway
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: gateway.networking.k8s.io
+        hookPhase: Succeeded
+        kind: HTTPRoute
+        message: HTTPRoute is healthy
+        name: grafana-route
+        namespace: observability
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: kyverno.io
+        hookPhase: Succeeded
+        kind: PolicyException
+        message: policyexception.kyverno.io/node-exporter-exception unchanged
+        name: node-exporter-exception
+        namespace: observability
+        status: Synced
+        syncPhase: Sync
+        version: v2
+      - group: monitoring.coreos.com
+        hookPhase: Succeeded
+        kind: AlertmanagerConfig
+        message: alertmanagerconfig.monitoring.coreos.com/platform-routing unchanged
+        name: platform-routing
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1alpha1
+      - group: external-secrets.io
+        hookPhase: Failed
+        kind: ExternalSecret
+        message: could not get secret data from provider
+        name: shipzen-alerts-secrets
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1beta1
+      - group: monitoring.coreos.com
+        hookPhase: Succeeded
+        kind: ServiceMonitor
+        message: servicemonitor.monitoring.coreos.com/shipzen-api unchanged
+        name: shipzen-api
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: gateway.networking.k8s.io
+        hookPhase: Succeeded
+        kind: HTTPRoute
+        message: HTTPRoute is healthy
+        name: shipzen-api
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: monitoring.coreos.com
+        hookPhase: Succeeded
+        kind: ServiceMonitor
+        message: servicemonitor.monitoring.coreos.com/shipzen-controller unchanged
+        name: shipzen-controller
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: karpenter.k8s.aws
+        hookPhase: Succeeded
+        kind: EC2NodeClass
+        message: EC2NodeClass is ready
+        name: shipzen-default
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: gateway.networking.k8s.io
+        hookPhase: Succeeded
+        kind: Gateway
+        message: Gateway is healthy
+        name: shipzen-gateway
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: gateway.networking.k8s.io
+        hookPhase: Succeeded
+        kind: HTTPRoute
+        message: HTTPRoute is healthy
+        name: shipzen-http-redirect
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: external-secrets.io
+        hookPhase: Succeeded
+        kind: ExternalSecret
+        message: Secret was synced
+        name: shipzen-tls-cert
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1beta1
+      - group: gateway.networking.k8s.io
+        hookPhase: Succeeded
+        kind: HTTPRoute
+        message: HTTPRoute is healthy
+        name: shipzen-ui
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: monitoring.coreos.com
+        hookPhase: Succeeded
+        kind: ServiceMonitor
+        message: servicemonitor.monitoring.coreos.com/shipzen-worker unchanged
+        name: shipzen-worker
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      - group: karpenter.sh
+        hookPhase: Succeeded
+        kind: NodePool
+        message: nodepool.karpenter.sh/tenant-pool unchanged
+        name: tenant-pool
+        namespace: shipzen-system
+        status: Synced
+        syncPhase: Sync
+        version: v1
+      revision: c59fc78cd2fe8406d7ddd16f8c8e19128dbf6eb2
+      source:
+        path: infra
+        repoURL: https://github.com/jeneeldumasia/ShipZen.git
+        targetRevision: HEAD
+  reconciledAt: "2026-06-23T00:20:32Z"
+  resourceHealthSource: appTree
+  resources:
+  - kind: ConfigMap
+    name: grafana-dashboards
+    namespace: observability
+    status: Synced
+    version: v1
+  - kind: ConfigMap
+    name: shipzen-schema
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - kind: Namespace
+    name: shipzen-system
+    status: Synced
+    version: v1
+  - kind: Service
+    name: shipzen-api
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - kind: Service
+    name: shipzen-api-metrics
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - kind: Service
+    name: shipzen-controller-metrics
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - kind: Service
+    name: shipzen-ui
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - kind: Service
+    name: shipzen-worker-metrics
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - kind: ServiceAccount
+    name: shipzen-api-sa
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - kind: ServiceAccount
+    name: shipzen-controller-sa
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - kind: ServiceAccount
+    name: shipzen-worker-sa
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: apps
+    kind: Deployment
+    name: shipzen-api
+    namespace: shipzen-system
+    status: OutOfSync
+    version: v1
+  - group: apps
+    kind: Deployment
+    name: shipzen-controller
+    namespace: shipzen-system
+    status: OutOfSync
+    version: v1
+  - group: apps
+    kind: Deployment
+    name: shipzen-ui
+    namespace: shipzen-system
+    status: OutOfSync
+    version: v1
+  - group: apps
+    kind: Deployment
+    name: shipzen-worker
+    namespace: shipzen-system
+    status: OutOfSync
+    version: v1
+  - group: autoscaling
+    kind: HorizontalPodAutoscaler
+    name: shipzen-controller-hpa
+    namespace: shipzen-system
+    status: Synced
+    version: v2
+  - group: batch
+    kind: CronJob
+    name: ecr-token-rotator
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: external-secrets.io
+    kind: ExternalSecret
+    name: shipzen-alerts-secrets
+    namespace: shipzen-system
+    status: Synced
+    version: v1beta1
+  - group: external-secrets.io
+    kind: ExternalSecret
+    name: shipzen-tls-cert
+    namespace: shipzen-system
+    status: Synced
+    version: v1beta1
+  - group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: aws-nlb-proxy
+    namespace: shipzen-system
+    status: Synced
+    version: v1alpha1
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: shipzen-gateway
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: gateway.networking.k8s.io
+    kind: GatewayClass
+    name: envoy-gateway
+    status: Synced
+    version: v1
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: grafana-route
+    namespace: observability
+    status: OutOfSync
+    version: v1
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: shipzen-api
+    namespace: shipzen-system
+    status: OutOfSync
+    version: v1
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: shipzen-http-redirect
+    namespace: shipzen-system
+    status: OutOfSync
+    version: v1
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: shipzen-ui
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: karpenter.k8s.aws
+    kind: EC2NodeClass
+    name: shipzen-default
+    status: Synced
+    version: v1
+  - group: karpenter.sh
+    kind: NodePool
+    name: builder-pool
+    status: Synced
+    version: v1
+  - group: karpenter.sh
+    kind: NodePool
+    name: tenant-pool
+    status: Synced
+    version: v1
+  - group: kyverno.io
+    kind: PolicyException
+    name: node-exporter-exception
+    namespace: observability
+    status: Synced
+    version: v2
+  - group: monitoring.coreos.com
+    kind: AlertmanagerConfig
+    name: platform-routing
+    namespace: shipzen-system
+    status: Synced
+    version: v1alpha1
+  - group: monitoring.coreos.com
+    kind: ServiceMonitor
+    name: shipzen-api
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: monitoring.coreos.com
+    kind: ServiceMonitor
+    name: shipzen-controller
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: monitoring.coreos.com
+    kind: ServiceMonitor
+    name: shipzen-worker
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: networking.k8s.io
+    kind: NetworkPolicy
+    name: api-server-egress
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: policy
+    kind: PodDisruptionBudget
+    name: shipzen-controller-pdb
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: policy
+    kind: PodDisruptionBudget
+    name: shipzen-worker-pdb
+    namespace: shipzen-system
+    status: Synced
+    version: v1
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+    name: shipzen-controller
+    status: Synced
+    version: v1
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+    name: shipzen-controller
+    status: Synced
+    version: v1
+  - group: rbac.authorization.k8s.io
+    kind: Role
+    name: shipzen-worker-role
+    namespace: shipzen-build
+    status: Synced
+    version: v1
+  - group: rbac.authorization.k8s.io
+    kind: RoleBinding
+    name: shipzen-worker-rolebinding
+    namespace: shipzen-build
+    status: Synced
+    version: v1
+  sourceHydrator: {}
+  sourceType: Kustomize
+  summary:
+    images:
+    - ghcr.io/jeneeldumasia/shipzen-api:sha-2d7fe42
+    - ghcr.io/jeneeldumasia/shipzen-controller:sha-2d7fe42
+    - ghcr.io/jeneeldumasia/shipzen-ui:sha-2d7fe42
+    - ghcr.io/jeneeldumasia/shipzen-worker:sha-2d7fe42
+  sync:
+    comparedTo:
+      destination:
+        namespace: shipzen-system
+        server: https://kubernetes.default.svc
+      ignoreDifferences:
+      - group: apps
+        jsonPointers:
+        - /spec/replicas
+        kind: Deployment
+        name: shipzen-builder
+        namespace: shipzen-build
+      source:
+        path: infra
+        repoURL: https://github.com/jeneeldumasia/ShipZen.git
+        targetRevision: HEAD
+    revision: c311bd0f40706dff7416856ca5e7e4e31f79709b
+    status: OutOfSync

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Terminal, X, Wifi, WifiOff, Loader2 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, getWsBaseUrl } from "@/lib/api";
 
 const ANSI_RE = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
 const LIVE_STATES = new Set(["Queued", "Building"]);
@@ -48,8 +48,7 @@ export function LogViewer({ projectId, deploymentId, buildId, deploymentState, t
     setStatus("live");
     setLines([]);
 
-    const wsUrl = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000")
-      .replace(/^http/, "ws");
+    const wsUrl = getWsBaseUrl();
     const ws = new WebSocket(
       `${wsUrl}/ws/projects/${projectId}/deployments/${deploymentId}/logs?token=${token}`
     );

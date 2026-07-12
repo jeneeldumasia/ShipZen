@@ -5,7 +5,6 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { MetricCard } from "@/components/MetricCard";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
-import { ActivityFeed } from "./ActivityFeed";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Dashboard" };
@@ -25,7 +24,8 @@ export default async function DashboardPage() {
   else if (hour < 18) greeting = "Good afternoon";
 
   const allReady = projects.every(p => p.status === "Ready");
-  const systemStatus = allReady ? "All systems are breathing." : "Systems are active.";
+  const notReadyCount = projects.filter(p => p.status !== "Ready").length;
+  const systemStatus = allReady ? "All systems operational." : `${notReadyCount} project${notReadyCount > 1 ? 's' : ''} need${notReadyCount === 1 ? 's' : ''} attention.`;
 
   return (
     <div className="w-full flex flex-col items-center justify-center min-h-[70vh] animate-fade-in">
@@ -38,9 +38,13 @@ export default async function DashboardPage() {
       {/* The Canvas (Projects as Minimalist Blocks) */}
       <div className="w-full max-w-4xl">
         {projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center opacity-50">
-            <p className="text-2xl font-display text-text-primary uppercase tracking-widest mb-4">The Void</p>
-            <p className="text-sm text-text-secondary font-mono tracking-widest uppercase">Cmd+K to create reality.</p>
+          <div className="flex flex-col items-center justify-center text-center opacity-80 mt-12">
+            <p className="text-2xl font-display text-text-primary tracking-tight mb-4">No Projects Found</p>
+            <p className="text-sm text-text-secondary mb-8 max-w-sm">Deploy your first application to get started.</p>
+            <Link href="/projects/new" className="btn-primary">
+              <Plus size={16} />
+              Create Project
+            </Link>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

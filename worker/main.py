@@ -97,7 +97,7 @@ S3_LOG_BUCKET = os.environ.get("S3_LOG_BUCKET", "")
 
 # Limit concurrent monitoring threads to prevent unbounded thread exhaustion
 import threading
-MAX_WORKERS = 20
+MAX_WORKERS = 200
 _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 _semaphore = threading.Semaphore(MAX_WORKERS)
 
@@ -293,9 +293,7 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
                 job_name, "shipzen-build", propagation_policy="Background")
         except Exception:
             pass
-        if queue and message_id:
-            queue.ack_message(message_id)
-        _semaphore.release()
+        pass
 
 
 def process_message(queue: QueueClient, state_machine: StateMachine, message_id: str, data: dict):
@@ -319,6 +317,7 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
             f"Deployment {deployment_id} is a rollback, skipping build.")
         state_machine.update_state(deployment_id, "Deploying")
         queue.ack_message(message_id)
+        _semaphore.release()
         return
 
     logger.info(f"Processing deployment {deployment_id}")
@@ -438,13 +437,13 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
                 raise Exception(f"Kubernetes Job creation failed (HTTP {e.status}): {e.reason}. "
                                 f"Ensure the 'shipzen-build' namespace exists and the worker ServiceAccount has batch/jobs create permission.")
 
-        # Spawn thread to monitor Job
+        # Call monitor_job synchronously in this thread
         builder_type = selected_builder.name if hasattr(
             selected_builder, 'name') else type(selected_builder).__name__
         project_id_db = deployment.get(
             "project_id", "unknown") if deployment else "unknown"
-        _semaphore.acquire()
-        _executor.submit(monitor_job, job_name, deployment_id, image_name, state_machine, builder_type, project_id_db, queue, message_id)
+        monitor_job(job_name, deployment_id, image_name, state_machine, builder_type, project_id_db)
+        queue.ack_message(message_id)
 
     except Exception as e:
         logger.error(f"Error processing {deployment_id}: {e}")
@@ -457,6 +456,7 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         shipzen_dlq_depth.inc()
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
+        _semaphore.release()
 
 
 def main():
@@ -480,13 +480,15 @@ def main():
             if claimed:
                 for msg_id, data in claimed:
                     shipzen_retry_total.inc()
-                    process_message(queue, state_machine, msg_id, data)
+                    _semaphore.acquire()
+                    _executor.submit(process_message, queue, state_machine, msg_id, data)
 
             messages = queue.get_messages(count=5, block_ms=2000)
             if messages:
                 for stream_name, msg_list in messages:
                     for msg_id, data in msg_list:
-                        process_message(queue, state_machine, msg_id, data)
+                        _semaphore.acquire()
+                        _executor.submit(process_message, queue, state_machine, msg_id, data)
         except Exception:
             logger.exception("Queue read error")
             time.sleep(2)

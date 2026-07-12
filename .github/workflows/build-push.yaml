@@ -45,7 +45,6 @@ jobs:
           IMAGE=$ECR_REGISTRY/shipzen/${{ matrix.component }}
           TAG=$(git rev-parse --short HEAD)
           docker build \
-            --build-arg NEXT_PUBLIC_API_URL=https://shipzen.jeneeldumasia.codes/api/v1 \
             -t $IMAGE:sha-$TAG \
             -t $IMAGE:latest \
             ./${{ matrix.component }}

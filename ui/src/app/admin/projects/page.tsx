@@ -2,9 +2,10 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { FolderGit2 } from "lucide-react";
 import Link from "next/link";
+import { getBaseUrl } from "@/lib/api";
 
 async function getGlobalProjects(token: string) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/projects`, {
+  const res = await fetch(`${getBaseUrl()}/projects`, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store"
   });

@@ -6,6 +6,7 @@ export const metadata: Metadata = {
 };
 
 import { auth } from "@/auth";
+import { getBaseUrl } from "@/lib/api";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CommandPalette } from "@/components/CommandPalette";
@@ -18,7 +19,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   let userWithRole = session?.user as any;
   if (session && (session as { accessToken?: string }).accessToken) {
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/me`, {
+      const res = await fetch(`${getBaseUrl()}/users/me`, {
         headers: { Authorization: `Bearer ${(session as { accessToken?: string }).accessToken}` },
         cache: 'no-store'
       });

@@ -41,7 +41,7 @@ export default function NewProjectPage() {
 
   return (
     <div className="max-w-xl">
-      <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-gray-700 mb-7 group">
+      <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary mb-7 group">
         <ArrowLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
         Back to Dashboard
       </Link>
@@ -58,7 +58,7 @@ export default function NewProjectPage() {
 
       <div className="card p-6">
         {error && (
-          <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg mb-5">
+          <div className="flex items-start gap-2.5 bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm px-4 py-3 rounded-lg mb-5">
             <span className="mt-0.5 text-red-500">⚠</span>
             {error}
           </div>
@@ -66,7 +66,7 @@ export default function NewProjectPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
               Project Name
             </label>
             <input
@@ -81,7 +81,7 @@ export default function NewProjectPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-text-primary mb-1.5">
               Kubernetes Namespace
             </label>
             <div className="relative">

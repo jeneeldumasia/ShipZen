@@ -2,6 +2,7 @@ import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { Terminal, LayoutDashboard, Settings, LogOut, UserRound } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { NavLinks } from "@/components/NavLinks";
 
 export async function Navigation() {
   const session = await auth();
@@ -37,8 +38,7 @@ export async function Navigation() {
         <div className="w-px h-4 bg-canvas-border mx-1" />
 
         {/* Nav links */}
-        <NavPill href="/" icon={<LayoutDashboard size={15} />} label="Dashboard" />
-        <NavPill href="/admin" icon={<Settings size={15} />} label="Admin" />
+        <NavLinks />
 
         <div className="w-px h-4 bg-canvas-border mx-1" />
 
@@ -75,15 +75,3 @@ export async function Navigation() {
   );
 }
 
-function NavPill({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="group flex items-center gap-2 px-3 py-1.5 rounded-full text-text-secondary hover:text-text-primary hover:bg-canvas-border/20 transition-all"
-      title={label}
-    >
-      {icon}
-      <span className="hidden sm:inline text-xs font-medium">{label}</span>
-    </Link>
-  );
-}

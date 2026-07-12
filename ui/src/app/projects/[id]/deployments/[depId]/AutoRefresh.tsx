@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { getWsBaseUrl } from "@/lib/api";
 
 /**
  * Connects to the WebSocket status endpoint for live updates.
@@ -26,7 +27,7 @@ export function AutoRefresh({ projectId, deploymentId, token }: { projectId: str
     const connect = () => {
       if (done || isUnmounted) return;
 
-      const wsUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/^http/, "ws") ?? "ws://localhost:8000";
+      const wsUrl = getWsBaseUrl();
       ws = new WebSocket(`${wsUrl}/ws/projects/${projectId}/deployments/${deploymentId}/status?token=${token}`);
 
       ws.onmessage = (event) => {
