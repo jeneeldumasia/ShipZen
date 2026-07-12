@@ -70,7 +70,7 @@ jobs:
 
       - name: Update all component tags in kustomization.yaml
         run: |
-          SHORT_SHA=$(git rev-parse --short HEAD)
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           TAG="sha-${SHORT_SHA}"
           echo "Updating all built components to tag: $TAG"
 
@@ -101,11 +101,11 @@ jobs:
               f.write(content)
           PYEOF
         env:
-          TAG: sha-$(git rev-parse --short HEAD)
+          TAG: sha-$(echo "${{ github.sha }}" | cut -c1-7)
 
       - name: Commit and push tag update
         run: |
-          SHORT_SHA=$(git rev-parse --short HEAD)
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           TAG="sha-${SHORT_SHA}"
 
           git config user.name "GitHub Actions Bot"

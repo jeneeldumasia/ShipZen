@@ -49,50 +49,56 @@ export function CommandPalette() {
         label="Global Command Menu"
         className="fixed inset-0 z-50 flex items-start justify-center pt-32 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
       >
-        <div className="bg-zinc-950 w-full max-w-xl rounded-xl border border-zinc-800 shadow-2xl overflow-hidden flex flex-col">
-          <div className="flex items-center px-4 border-b border-zinc-800">
+        <div className="bg-canvas-bg w-full max-w-2xl rounded-none border-2 border-text-primary shadow-[24px_24px_0_0_rgba(0,0,0,1)] dark:shadow-[24px_24px_0_0_rgba(255,255,255,1)] overflow-hidden flex flex-col transition-all duration-300">
+          <div className="flex items-center px-6 border-b-2 border-text-primary">
             <Command.Input 
               placeholder="Search projects or run a command..." 
-              className="w-full bg-transparent text-sm text-zinc-100 placeholder:text-text-secondary py-4 focus:outline-none"
+              className="w-full bg-transparent text-xl font-display font-bold text-text-primary placeholder:text-text-secondary py-6 focus:outline-none"
             />
-            <button onClick={() => setOpen(false)} className="text-text-secondary hover:text-zinc-300 ml-2">
-              <X size={16} />
+            <button onClick={() => setOpen(false)} className="text-text-secondary hover:text-text-primary ml-2 transition-colors">
+              <X size={24} />
             </button>
           </div>
           
-          <Command.List className="max-h-[300px] overflow-y-auto p-2">
-            <Command.Empty className="py-6 text-center text-sm text-text-secondary">
+          <Command.List className="max-h-[400px] overflow-y-auto p-0">
+            <Command.Empty className="py-12 text-center text-sm font-mono uppercase tracking-widest text-text-secondary">
               {loading ? "Loading..." : "No results found."}
             </Command.Empty>
 
-            <Command.Group heading="Actions" className="px-2 py-1.5 text-xs font-medium text-text-secondary">
+            <Command.Group heading="Actions" className="px-4 py-3 text-[10px] font-mono uppercase tracking-widest text-text-secondary">
               <Command.Item 
                 onSelect={() => { setOpen(false); router.push("/projects/new"); }}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer aria-selected:bg-brand aria-selected:text-canvas-bg transition-colors"
+                className="flex items-center gap-3 px-4 py-4 text-base font-bold text-text-primary cursor-pointer aria-selected:bg-text-primary aria-selected:text-canvas-bg transition-colors group"
               >
-                <Plus size={14} /> New Project
-                <span className="ml-auto text-[10px] text-text-secondary aria-selected:text-white/70">N</span>
+                <Plus size={18} /> New Project
+                <span className="ml-auto text-[10px] font-mono border border-current px-1 group-aria-selected:border-canvas-bg">N</span>
               </Command.Item>
               <Command.Item 
                 onSelect={() => { setOpen(false); router.push("/"); }}
-                className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer aria-selected:bg-brand aria-selected:text-canvas-bg transition-colors"
+                className="flex items-center gap-3 px-4 py-4 text-base font-bold text-text-primary cursor-pointer aria-selected:bg-text-primary aria-selected:text-canvas-bg transition-colors"
               >
-                <Terminal size={14} /> Dashboard
+                <Terminal size={18} /> Dashboard
+              </Command.Item>
+              <Command.Item 
+                onSelect={() => { setOpen(false); router.push("/admin"); }}
+                className="flex items-center gap-3 px-4 py-4 text-base font-bold text-text-primary cursor-pointer aria-selected:bg-text-primary aria-selected:text-canvas-bg transition-colors"
+              >
+                <Terminal size={18} /> Admin Console
               </Command.Item>
             </Command.Group>
 
             {projects.length > 0 && (
-              <Command.Group heading="Projects" className="px-2 py-1.5 text-xs font-medium text-text-secondary mt-2">
+              <Command.Group heading="Projects" className="px-4 py-3 text-[10px] font-mono uppercase tracking-widest text-text-secondary border-t border-canvas-border">
                 {projects.map((p) => (
                   <Command.Item
                     key={p.id}
                     value={p.name}
                     onSelect={() => { setOpen(false); router.push(`/projects/${p.id}`); }}
-                    className="flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 rounded-md cursor-pointer aria-selected:bg-zinc-800 aria-selected:text-white transition-colors"
+                    className="flex items-center gap-3 px-4 py-4 text-base font-bold text-text-primary cursor-pointer aria-selected:bg-text-primary aria-selected:text-canvas-bg transition-colors"
                   >
-                    <FolderGit2 size={14} className="text-text-secondary" />
+                    <FolderGit2 size={18} className="text-current opacity-50" />
                     {p.name}
-                    <span className="ml-2 text-[10px] text-text-secondary font-mono">{p.namespace}</span>
+                    <span className="ml-2 text-[10px] font-mono uppercase tracking-widest opacity-50">{p.namespace}</span>
                   </Command.Item>
                 ))}
               </Command.Group>

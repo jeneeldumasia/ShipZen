@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Sidebar } from "@/components/Sidebar";
-
 export const metadata: Metadata = {
   title: { default: "ShipZen", template: "%s · ShipZen" },
   description: "Internal Developer Platform",
@@ -41,13 +39,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           enableSystem
           disableTransitionOnChange
         >
-          <Sidebar user={userWithRole} />
-        {/* Content pushed right of the fixed sidebar */}
-        <div className="pl-60 min-h-screen flex flex-col">
-          <main className="flex-1 p-8 max-w-6xl w-full mx-auto animate-fade-in z-10 relative">
-            {children}
-          </main>
-        </div>
+          {/* Pure Canvas Layout */}
+          <div className="w-full min-h-screen flex flex-col items-center pt-24 px-8">
+            <main className="flex-1 w-full max-w-5xl animate-fade-in z-10 relative">
+              {children}
+            </main>
+          </div>
           <CommandPalette />
           <Toaster position="bottom-right" theme="system" />
         </ThemeProvider>

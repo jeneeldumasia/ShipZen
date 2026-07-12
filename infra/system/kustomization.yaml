@@ -17,3 +17,4 @@ resources:
   - grafana-dashboards.yaml
   - ecr-token-rotator-sa.yaml
   - ecr-token-rotator.yaml
+  - github-app-secret.yaml
