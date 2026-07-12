@@ -36,7 +36,7 @@ export default async function AdminProjectsPage() {
             <tr>
               <th className="px-6 py-4">Project</th>
               <th className="px-6 py-4">Namespace</th>
-              <th className="px-6 py-4">Owner ID</th>
+              <th className="px-6 py-4">Owner Email</th>
               <th className="px-6 py-4">Status</th>
               <th className="px-6 py-4 text-right">Actions</th>
             </tr>
@@ -46,7 +46,7 @@ export default async function AdminProjectsPage() {
               <tr key={p.id} className="hover:bg-white/5 transition-colors">
                 <td className="px-6 py-4 font-medium text-white">{p.name}</td>
                 <td className="px-6 py-4 font-mono text-xs">{p.namespace}</td>
-                <td className="px-6 py-4 font-mono text-xs text-brand/80">{p.owner_id}</td>
+                <td className="px-6 py-4 font-mono text-xs text-brand/80">{p.owner_email || p.owner_id}</td>
                 <td className="px-6 py-4">
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
                     p.status === "Ready" ? "bg-green-500/20 text-green-400" :

@@ -240,11 +240,23 @@ def list_projects(request: Request, current_user: User = Depends(get_current_use
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 if current_user.is_admin:
                     cur.execute(
-                        "SELECT * FROM projects WHERE deleted_at IS NULL ORDER BY created_at DESC;"
+                        """
+                        SELECT p.*, u.email as owner_email 
+                        FROM projects p
+                        LEFT JOIN users u ON p.owner_id = u.id
+                        WHERE p.deleted_at IS NULL 
+                        ORDER BY p.created_at DESC;
+                        """
                     )
                 else:
                     cur.execute(
-                        "SELECT * FROM projects WHERE deleted_at IS NULL AND owner_id = %s ORDER BY created_at DESC;",
+                        """
+                        SELECT p.*, u.email as owner_email 
+                        FROM projects p
+                        LEFT JOIN users u ON p.owner_id = u.id
+                        WHERE p.deleted_at IS NULL AND p.owner_id = %s 
+                        ORDER BY p.created_at DESC;
+                        """,
                         (current_user.user_id,)
                     )
                 return [_serialize(dict(r)) for r in cur.fetchall()]

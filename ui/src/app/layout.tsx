@@ -9,6 +9,7 @@ import { auth } from "@/auth";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CommandPalette } from "@/components/CommandPalette";
+import { Navigation } from "@/components/Navigation";
 import { Toaster } from "sonner";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -39,6 +40,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           enableSystem
           disableTransitionOnChange
         >
+          <Navigation />
           {/* Pure Canvas Layout */}
           <div className="w-full min-h-screen flex flex-col items-center pt-24 px-8">
             <main className="flex-1 w-full max-w-5xl animate-fade-in z-10 relative">
