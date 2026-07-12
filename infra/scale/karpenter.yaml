@@ -7,7 +7,7 @@ spec:
   # v1 requires amiSelectorTerms instead of amiFamily
   amiSelectorTerms:
     # Pinned to AL2023 v20250512. Pinned on 2025-07-02. Review by 2025-12-29.
-    - alias: al2023@v20250512
+    - alias: al2023@latest
   role: "ShipZenKarpenterNodeRole"
   subnetSelectorTerms:
     - tags:
