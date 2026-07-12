@@ -4,14 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Settings, FolderGit2 } from "lucide-react";
 
-export function NavLinks() {
+export function NavLinks({ isAdmin }: { isAdmin?: boolean }) {
   const pathname = usePathname();
 
   return (
     <>
       <NavPill href="/" icon={<LayoutDashboard size={15} />} label="Dashboard" active={pathname === "/"} />
       <NavPill href="/projects" icon={<FolderGit2 size={15} />} label="Projects" active={pathname.startsWith("/projects")} />
-      <NavPill href="/admin" icon={<Settings size={15} />} label="Admin" active={pathname.startsWith("/admin")} />
+      {isAdmin && <NavPill href="/admin" icon={<Settings size={15} />} label="Admin" active={pathname.startsWith("/admin")} />}
     </>
   );
 }

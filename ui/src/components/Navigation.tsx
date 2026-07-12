@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { auth, signOut } from "@/auth";
+import { getBaseUrl } from "@/lib/api";
 import { Terminal, LayoutDashboard, Settings, LogOut, UserRound } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLinks } from "@/components/NavLinks";
@@ -7,6 +8,19 @@ import { NavLinks } from "@/components/NavLinks";
 export async function Navigation() {
   const session = await auth();
   if (!session) return null;
+
+  const token = (session as any).accessToken;
+  let isAdmin = false;
+  try {
+    const res = await fetch(`${getBaseUrl()}/users/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      isAdmin = !!data.is_admin;
+    }
+  } catch (e) {}
 
   const user = session.user as any;
   const initials = user?.name
@@ -38,7 +52,7 @@ export async function Navigation() {
         <div className="w-px h-4 bg-canvas-border mx-1" />
 
         {/* Nav links */}
-        <NavLinks />
+        <NavLinks isAdmin={isAdmin} />
 
         <div className="w-px h-4 bg-canvas-border mx-1" />
 
