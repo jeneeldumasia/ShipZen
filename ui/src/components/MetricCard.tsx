@@ -15,11 +15,11 @@ export function MetricCard({
   trend?: string;
 }) {
   const colors = {
-    default: { icon: "text-text-secondary bg-gray-100",  value: "text-text-primary" },
-    green:   { icon: "text-emerald-600 bg-emerald-50", value: "text-emerald-700" },
-    blue:    { icon: "text-blue-600 bg-blue-50",   value: "text-blue-700" },
-    red:     { icon: "text-red-600 bg-red-50",     value: "text-red-700" },
-    amber:   { icon: "text-amber-600 bg-amber-50", value: "text-amber-700" },
+    default: { icon: "text-slate-500 bg-slate-100 dark:bg-slate-800",  value: "text-text-primary" },
+    green:   { icon: "text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/30", value: "text-emerald-700 dark:text-emerald-400" },
+    blue:    { icon: "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30",   value: "text-blue-700 dark:text-blue-400" },
+    red:     { icon: "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/30",     value: "text-red-700 dark:text-red-400" },
+    amber:   { icon: "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30", value: "text-amber-700 dark:text-amber-400" },
   };
 
   const c = colors[color];
@@ -34,7 +34,7 @@ export function MetricCard({
           </div>
         )}
       </div>
-      <p className={cn("text-3xl font-bold tabular-nums mt-1", c.value)}>{value}</p>
+      <p className={cn("text-4xl font-display font-bold tabular-nums mt-1", c.value)}>{value}</p>
       {trend && <p className="text-xs text-text-secondary mt-0.5">{trend}</p>}
     </div>
   );

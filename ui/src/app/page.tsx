@@ -17,103 +17,51 @@ async function getProjects(): Promise<Project[]> {
 
 export default async function DashboardPage() {
   const projects = await getProjects();
-  const ready       = projects.filter(p => p.status === "Ready").length;
-  const provisioning = projects.filter(p => p.status === "Provisioning").length;
-  const terminating  = projects.filter(p => p.status === "Terminating").length;
+  
+  // Intelligent greeting based on time
+  const hour = new Date().getHours();
+  let greeting = "Good evening";
+  if (hour < 12) greeting = "Good morning";
+  else if (hour < 18) greeting = "Good afternoon";
+
+  const allReady = projects.every(p => p.status === "Ready" || p.status === "Success");
+  const systemStatus = allReady ? "All systems are breathing." : "Systems are active.";
 
   return (
-    <div>
-      <PageHeader
-        title="Dashboard"
-        description="Overview of your platform"
-        actions={
-          <Link href="/projects/new" className="btn-primary">
-            <Plus size={15} />
-            New Project
-          </Link>
-        }
-      />
-
-      {/* Metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <MetricCard label="Total Projects" value={projects.length} icon={FolderGit2} />
-        <MetricCard label="Running"        value={ready}          icon={CheckCircle2} color="green" />
-        <MetricCard label="Provisioning"   value={provisioning}   icon={Clock}        color="blue" />
-        <MetricCard label="Terminating"    value={terminating}    icon={AlertTriangle} color="amber" />
+    <div className="w-full flex flex-col items-center justify-center min-h-[70vh] animate-fade-in">
+      {/* Intelligent Greeting */}
+      <div className="text-center mb-24">
+        <h1 className="text-5xl font-display font-bold text-text-primary tracking-tighter mb-4">{greeting}.</h1>
+        <p className="text-lg text-text-secondary font-serif italic tracking-wide">{systemStatus}</p>
       </div>
 
-      {/* Projects and Activity Feed Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-      {/* Projects table */}
-      <div className="card overflow-hidden lg:col-span-2 flex flex-col h-[600px]">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-canvas-border shrink-0">
-          <h2 className="text-sm font-semibold text-text-primary">Projects</h2>
-          <span className="text-xs text-text-secondary">{projects.length} total</span>
-        </div>
-
-        <div className="flex-1 overflow-y-auto">
+      {/* The Canvas (Projects as Minimalist Blocks) */}
+      <div className="w-full max-w-4xl">
         {projects.length === 0 ? (
-          <EmptyState
-            icon={FolderGit2}
-            title="No projects yet"
-            description="Create your first project to start deploying applications."
-            action={
-              <Link href="/projects/new" className="btn-primary">
-                <Plus size={15} /> New Project
-              </Link>
-            }
-          />
+          <div className="flex flex-col items-center justify-center text-center opacity-50">
+            <p className="text-2xl font-display text-text-primary uppercase tracking-widest mb-4">The Void</p>
+            <p className="text-sm text-text-secondary font-mono tracking-widest uppercase">Cmd+K to create reality.</p>
+          </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-canvas-border bg-black/5 dark:bg-white/5">
-                <th className="text-left px-6 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">Project</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">Namespace</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">Status</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-text-secondary uppercase tracking-wide">Created</th>
-                <th className="px-6 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-canvas-border">
-              {projects.map((p) => (
-                <tr key={p.id} className="table-row-hover group">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center flex-shrink-0">
-                        <FolderGit2 size={14} className="text-brand" />
-                      </div>
-                      <span className="font-medium text-text-primary">{p.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <code className="text-xs bg-black/5 dark:bg-white/5 text-text-secondary px-2 py-0.5 rounded font-mono">
-                      {p.namespace}
-                    </code>
-                  </td>
-                  <td className="px-6 py-4"><StatusBadge status={p.status} /></td>
-                  <td className="px-6 py-4 text-xs text-text-secondary">
-                    {new Date(p.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Link
-                      href={`/projects/${p.id}`}
-                      className="text-xs font-medium text-brand hover:text-brand-hover opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      Open →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {projects.map((p) => (
+              <Link 
+                href={`/projects/${p.id}`} 
+                key={p.id}
+                className="group relative flex flex-col items-center justify-center py-16 px-8 border border-transparent hover:border-canvas-border transition-all duration-[500ms] ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-2"
+              >
+                {/* Aura Glow on Hover */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-brand/5 blur-2xl transition-opacity duration-700 -z-10 rounded-full" />
+                
+                <h2 className="text-3xl font-display font-bold text-text-primary tracking-tight mb-3 group-hover:text-brand transition-colors">{p.name}</h2>
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={p.status} size="sm" />
+                  <span className="text-[10px] font-mono text-text-secondary uppercase tracking-widest">{p.namespace}</span>
+                </div>
+              </Link>
+            ))}
+          </div>
         )}
-      </div>
-      </div>
-      
-      <div className="lg:col-span-1">
-        <ActivityFeed />
-      </div>
       </div>
     </div>
   );

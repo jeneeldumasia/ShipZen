@@ -64,50 +64,42 @@ export function LiveLogPanel({ projectId, deploymentId, token }: Props) {
   }, [lines]);
 
   return (
-    <div className="card overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-canvas-border bg-zinc-900/80">
-        <div className="flex items-center gap-2">
-          <Terminal size={14} className="text-brand" />
-          <span className="text-xs font-semibold font-mono text-zinc-200">Build Output</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {connected && (
-            <span className="flex items-center gap-1 text-xs text-emerald-400 font-medium">
-              <Wifi size={11} className="animate-pulse" />
-              Live
-            </span>
-          )}
-          {ended && (
-            <span className="flex items-center gap-1 text-xs text-zinc-500 font-medium">
-              <WifiOff size={11} />
-              Stream ended
-            </span>
-          )}
-          {!connected && !ended && (
-            <span className="text-xs text-zinc-500 font-medium animate-pulse">Connecting…</span>
-          )}
-        </div>
-      </div>
-
-      {/* Terminal body */}
-      <div className="bg-zinc-950 h-72">
+    <div className="w-full flex flex-col items-center justify-center relative">
+      <div className="h-64 w-full flex flex-col items-center justify-end overflow-hidden pb-4 relative" style={{ maskImage: "linear-gradient(to bottom, transparent, black 80%)", WebkitMaskImage: "linear-gradient(to bottom, transparent, black 80%)" }}>
+        
         {lines.length === 0 && !ended ? (
-          <div className="flex items-center justify-center h-full text-zinc-600 font-mono text-xs gap-2">
-            <Wifi size={13} className="animate-pulse text-emerald-600" />
-            Waiting for build output…
+          <div className="flex items-center gap-3 text-text-secondary font-mono text-xs uppercase tracking-widest animate-pulse">
+            <Wifi size={14} className="text-brand" />
+            Awaiting Telemetry...
           </div>
         ) : (
-          <pre
-            ref={scrollRef}
-            className="h-full overflow-y-auto p-4 text-[11px] font-mono leading-relaxed text-zinc-300 whitespace-pre-wrap"
-          >
-            {lines.join("\n")}
-            {/* Blinking cursor while live */}
+          <div className="flex flex-col items-center gap-2 w-full max-w-2xl text-center">
+            {lines.slice(-6).map((line, idx, arr) => {
+              // The very last item is fully opaque. As we go back, they fade.
+              const isLast = idx === arr.length - 1;
+              const opacity = isLast ? 1 : Math.max(0.1, (idx + 1) / arr.length);
+              
+              return (
+                <div 
+                  key={line + idx} 
+                  className={`font-mono text-xs tracking-widest uppercase transition-all duration-500 ease-out`}
+                  style={{ 
+                    opacity: opacity, 
+                    transform: `translateY(${isLast ? '0px' : '-4px'}) scale(${isLast ? 1 : 0.98})`,
+                    color: isLast ? "var(--text-primary)" : "var(--text-secondary)"
+                  }}
+                >
+                  {line.substring(0, 80)}{line.length > 80 ? "..." : ""}
+                </div>
+              );
+            })}
+            
             {connected && (
-              <span className="inline-block w-1.5 h-3 bg-emerald-400 ml-0.5 animate-pulse align-text-bottom" />
+              <div className="mt-2 text-[10px] font-mono text-brand uppercase tracking-widest animate-pulse flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-brand" /> Streaming
+              </div>
             )}
-          </pre>
+          </div>
         )}
       </div>
     </div>
