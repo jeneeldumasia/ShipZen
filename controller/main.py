@@ -105,7 +105,6 @@ def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
             conn = get_db_connection()
             with conn.cursor() as cur:
                 cur.execute("SELECT 1 FROM projects LIMIT 1;")
-            close_db_connection(conn)
             logger.info("Database schema is ready.")
             return
         except psycopg2.OperationalError as e:
@@ -120,7 +119,7 @@ def _wait_for_schema(max_attempts: int = 30, delay: int = 10):
         finally:
             if conn is not None:
                 try:
-                    conn.close()
+                    close_db_connection(conn)
                 except Exception:
                     pass
         time.sleep(delay)
