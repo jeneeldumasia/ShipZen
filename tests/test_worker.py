@@ -8,9 +8,9 @@ def test_update_state_uses_update():
     Test that update_state executes an UPDATE statement and not an INSERT
     to avoid violating the NOT NULL constraints.
     """
-    with patch('worker.state_machine.StateMachine._get_conn') as mock_get_conn:
+    with patch('worker.state_machine.get_db_connection') as mock_get_conn:
         mock_conn = MagicMock()
-        mock_get_conn.return_value = mock_conn
+        mock_get_conn.return_value.__enter__.return_value = mock_conn
         mock_cur = MagicMock()
         mock_conn.cursor.return_value.__enter__.return_value = mock_cur
         mock_cur.rowcount = 1

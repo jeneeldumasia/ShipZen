@@ -5,6 +5,7 @@ import json
 import base64
 import boto3
 import logging
+from kubernetes import client
 
 
 def get_ecr_credentials():
@@ -13,6 +14,24 @@ def get_ecr_credentials():
         token_resp = ecr.get_authorization_token(
         )['authorizationData'][0]['authorizationToken']
         ecr_token = base64.b64decode(token_resp).decode('utf-8').split(':')[1]
+        
+        # Security Fix: Sync the ECR token to a K8s Secret so we don't have to pass it via CLI args
+        try:
+            core_v1 = client.CoreV1Api()
+            secret = client.V1Secret(
+                metadata=client.V1ObjectMeta(name="shipzen-ecr-secret", namespace="shipzen-build"),
+                string_data={"ECR_TOKEN": ecr_token, "DOCKER_AUTH": token_resp}
+            )
+            try:
+                core_v1.create_namespaced_secret(namespace="shipzen-build", body=secret)
+            except client.ApiException as e:
+                if e.status == 409:
+                    core_v1.replace_namespaced_secret(name="shipzen-ecr-secret", namespace="shipzen-build", body=secret)
+                else:
+                    raise
+        except Exception as k8s_e:
+            logger.warning(f"Failed to sync ECR Secret to K8s: {k8s_e}")
+            
         return token_resp, ecr_token
     except Exception as e:
         logger.warning(f"Warning: Failed to fetch ECR token: {e}")
@@ -39,15 +58,17 @@ class DockerfileBuilder(Builder):
     def generate_job_manifest(self, deployment_id: str, repo_url: str, branch: str, image_uri: str, overrides: dict) -> Dict[str, Any]:
         token_resp, ecr_token = get_ecr_credentials()
         registry = image_uri.split('/')[0] if '/' in image_uri else ''
-        docker_config = json.dumps({"auths": {registry: {"auth": token_resp}}})
 
-        # Run buildkitd as a background process inside a single container, then invoke
-        # buildctl once the daemon is ready. Using the main container command (not a
-        # postStart lifecycle hook) ensures that a non-zero exit code fails the Job pod.
+        git_clone_env = []
+        if overrides.get("github_secret_name"):
+            git_clone_env = [{"name": "GITHUB_TOKEN", "valueFrom": {"secretKeyRef": {"name": overrides["github_secret_name"], "key": "GITHUB_TOKEN"}}}]
+            clone_cmd = f"URL=$(echo '{repo_url}' | sed \"s|https://github.com/|https://x-access-token:${{GITHUB_TOKEN}}@github.com/|\") && git clone --depth=1 --branch {branch} $URL /workspace"
+        else:
+            clone_cmd = f"git clone --depth=1 --branch {branch} {repo_url} /workspace"
+
         build_script = (
             "set -e; "
-            "mkdir -p ~/.config/buildkit ~/.docker; "
-            f"echo '{docker_config}' > ~/.docker/config.json; "
+            "mkdir -p ~/.config/buildkit; "
             "rootlesskit buildkitd --oci-worker-no-process-sandbox & "
             "BKPID=$!; "
             "for i in $(seq 1 30); do buildctl debug workers && break || sleep 1; done; "
@@ -55,8 +76,14 @@ class DockerfileBuilder(Builder):
             f"  --frontend dockerfile.v0 "
             f"  --local context=/workspace "
             f"  --local dockerfile=/workspace "
-            f"  --output type=image,name={image_uri},push=true; "
+            f"  --output type=docker,dest=/shared/image.tar; "
             "EXIT=$?; kill $BKPID 2>/dev/null || true; exit $EXIT"
+        )
+
+        push_script = (
+            "set -e; "
+            f"crane auth login -u AWS -p $ECR_TOKEN {registry}; "
+            f"crane push /shared/image.tar {image_uri}"
         )
 
         return {
@@ -90,9 +117,8 @@ class DockerfileBuilder(Builder):
                                 "name": "git-clone",
                                 "image": "alpine/git:2.43.0",
                                 "command": ["sh", "-c"],
-                                "args": [
-                                    "git clone --depth=1 --branch " + branch + " " + repo_url + " /workspace"
-                                ],
+                                "args": [clone_cmd],
+                                "env": git_clone_env,
                                 "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
                                 "securityContext": {
                                     "runAsUser": 1000,
@@ -100,25 +126,35 @@ class DockerfileBuilder(Builder):
                                     "allowPrivilegeEscalation": False,
                                     "seccompProfile": {"type": "RuntimeDefault"}
                                 }
-                            }
-                        ],
-                        "containers": [
+                            },
                             {
                                 "name": "buildkit",
                                 "image": "moby/buildkit:master-rootless",
-                                # Run the daemon + build in the main process so the
-                                # container exit code reflects build success/failure.
                                 "command": ["sh", "-c", build_script],
                                 "securityContext": {
                                     "runAsUser": 1000,
                                     "runAsGroup": 1000,
                                     "seccompProfile": {"type": "Unconfined"}
                                 },
-                                "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}]
+                                # No ECR token here!
+                                "volumeMounts": [
+                                    {"name": "workspace", "mountPath": "/workspace"},
+                                    {"name": "shared", "mountPath": "/shared"}
+                                ]
+                            }
+                        ],
+                        "containers": [
+                            {
+                                "name": "push",
+                                "image": "gcr.io/go-containerregistry/crane:debug",
+                                "command": ["sh", "-c", push_script],
+                                "envFrom": [{"secretRef": {"name": "shipzen-ecr-secret"}}],
+                                "volumeMounts": [{"name": "shared", "mountPath": "/shared"}],
                             }
                         ],
                         "volumes": [
-                            {"name": "workspace", "emptyDir": {}}
+                            {"name": "workspace", "emptyDir": {}},
+                            {"name": "shared", "emptyDir": {}}
                         ]
                     }
                 }
@@ -146,10 +182,15 @@ class BuildpackBuilder(Builder):
         token_resp, ecr_token = get_ecr_credentials()
         registry = image_uri.split('/')[0] if '/' in image_uri else ''
 
-        # Build the script for initContainer that clones and applies the SPA hack if needed
-        # Overrides contains instructions if we need to inject server.js
+        git_clone_env = []
+        if overrides.get("github_secret_name"):
+            git_clone_env = [{"name": "GITHUB_TOKEN", "valueFrom": {"secretKeyRef": {"name": overrides["github_secret_name"], "key": "GITHUB_TOKEN"}}}]
+            clone_cmd = f"URL=$(echo '{repo_url}' | sed \"s|https://github.com/|https://x-access-token:${{GITHUB_TOKEN}}@github.com/|\") && git clone --depth=1 --branch {branch} $URL /workspace"
+        else:
+            clone_cmd = f"git clone --depth=1 --branch {branch} {repo_url} /workspace"
+
         setup_script = f"""
-git clone --depth=1 --branch {branch} {repo_url} /workspace
+{clone_cmd}
 cd /workspace
 """
         if overrides.get("inject_server_js"):
@@ -210,10 +251,16 @@ fi
             env_vars.append({"name": "BP_NODE_RUN_SCRIPTS",
                             "value": overrides.get("bp_node_run_scripts")})
 
-        pack_args = ["pack", "build", image_uri, "--path", "/workspace", "--builder",
-                     "paketobuildpacks/builder-jammy-base", "--publish", "--env", "NODE_OPTIONS=--max-old-space-size=2048"]
+        pack_args = ["pack", "build", "local-image", "--path", "/workspace", "--builder",
+                     "paketobuildpacks/builder-jammy-base", "--env", "NODE_OPTIONS=--max-old-space-size=2048"]
         if overrides.get("runtime"):
             pack_args.extend(["--buildpack", overrides.get("runtime")])
+
+        push_script = (
+            "set -e; "
+            f"crane auth login -u AWS -p $ECR_TOKEN {registry}; "
+            f"crane push /shared/image.tar {image_uri}"
+        )
 
         return {
             "apiVersion": "batch/v1",
@@ -229,10 +276,10 @@ fi
             "spec": {
                 "backoffLimit": 0,
                 "activeDeadlineSeconds": 1800,
+                "ttlSecondsAfterFinished": 600,
                 "template": {
                     "spec": {
                         "restartPolicy": "Never",
-
                         "tolerations": [
                             {"key": "shipzen.jeneeldumasia.codes/dedicated",
                                 "operator": "Equal", "value": "builder", "effect": "NoSchedule"}
@@ -242,6 +289,7 @@ fi
                                 "name": "setup",
                                 "image": "alpine/git:2.43.0",
                                 "command": ["sh", "-c", setup_script],
+                                "env": git_clone_env,
                                 "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
                                 "securityContext": {
                                     "runAsUser": 1000,
@@ -249,9 +297,7 @@ fi
                                     "allowPrivilegeEscalation": False,
                                     "seccompProfile": {"type": "RuntimeDefault"}
                                 }
-                            }
-                        ],
-                        "containers": [
+                            },
                             {
                                 "name": "pack",
                                 "image": "docker:24-dind-rootless",
@@ -261,19 +307,32 @@ fi
                                     "seccompProfile": {"type": "Unconfined"}
                                 },
                                 "env": env_vars,
-                                "volumeMounts": [{"name": "workspace", "mountPath": "/workspace"}],
+                                "volumeMounts": [
+                                    {"name": "workspace", "mountPath": "/workspace"},
+                                    {"name": "shared", "mountPath": "/shared"}
+                                ],
                                 "command": ["sh", "-c"],
                                 "args": [
                                     "dockerd --tls=false & "
                                     "while ! docker info >/dev/null 2>&1; do sleep 1; done; "
-                                    f"echo '{ecr_token}' | docker login --username AWS --password-stdin {registry} && "
                                     "wget -qO- https://github.com/buildpacks/pack/releases/download/v0.33.2/pack-v0.33.2-linux.tgz | tar -xz -C /usr/local/bin && "
-                                    + " ".join(pack_args)
+                                    + " ".join(pack_args) + " && "
+                                    "docker save local-image -o /shared/image.tar"
                                 ]
                             }
                         ],
+                        "containers": [
+                            {
+                                "name": "push",
+                                "image": "gcr.io/go-containerregistry/crane:debug",
+                                "command": ["sh", "-c", push_script],
+                                "envFrom": [{"secretRef": {"name": "shipzen-ecr-secret"}}],
+                                "volumeMounts": [{"name": "shared", "mountPath": "/shared"}],
+                            }
+                        ],
                         "volumes": [
-                            {"name": "workspace", "emptyDir": {}}
+                            {"name": "workspace", "emptyDir": {}},
+                            {"name": "shared", "emptyDir": {}}
                         ]
                     }
                 }

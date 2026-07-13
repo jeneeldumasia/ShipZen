@@ -101,13 +101,7 @@ MAX_WORKERS = 200
 _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 _semaphore = threading.Semaphore(MAX_WORKERS)
 
-
-def get_db_conn():
-    import psycopg2
-    conn = psycopg2.connect(os.environ.get("DATABASE_URL", ""))
-    conn.autocommit = True
-    return conn
-
+from worker.database import get_db_connection
 
 def record_build(deployment_id: str, s3_key: str, status: str):
     build_id = str(uuid.uuid4())
@@ -117,13 +111,12 @@ def record_build(deployment_id: str, s3_key: str, status: str):
         return
     s3_uri = f"s3://{S3_LOG_BUCKET}/{s3_key}"
     try:
-        conn = get_db_conn()
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO builds (build_id, deployment_id, s3_log_uri, status)
-                VALUES (%s, %s, %s, %s);
-            """, (build_id, deployment_id, s3_uri, status))
-        conn.close()
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO builds (build_id, deployment_id, s3_log_uri, status)
+                    VALUES (%s, %s, %s, %s);
+                """, (build_id, deployment_id, s3_uri, status))
     except Exception as e:
         logger.error(f"Failed to record build for {deployment_id}: {e}")
 
@@ -177,16 +170,19 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
         except ApiException as e:
             logger.warning(f"Error reading pod logs: {e}")
 
-        # Wait for Job to complete
+        # Wait for Job to complete using Watch API
         job_succeeded = False
-        while True:
-            job = batch_v1.read_namespaced_job(job_name, "shipzen-build")
-            if job.status.succeeded and job.status.succeeded >= 1:
-                job_succeeded = True
-                break
-            if job.status.failed and job.status.failed >= 1:
-                break
-            time.sleep(2)
+        job_w = watch.Watch()
+        try:
+            for event in job_w.stream(batch_v1.list_namespaced_job, namespace="shipzen-build", field_selector=f"metadata.name={job_name}", timeout_seconds=3600):
+                job = event['object']
+                if job.status.succeeded and job.status.succeeded >= 1:
+                    job_succeeded = True
+                    break
+                if job.status.failed and job.status.failed >= 1:
+                    break
+        finally:
+            job_w.stop()
 
         # Upload logs to S3
         stdout_bytes = b''.join(stdout_chunks)
@@ -230,12 +226,10 @@ def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machin
 
                 if exposed_ports:
                     first_port = list(exposed_ports.keys())[0].split('/')[0]
-                    conn = get_db_conn()
-                    with conn.cursor() as cur:
-                        cur.execute("UPDATE deployments SET port = %s WHERE deployment_id = %s;", (int(
-                            first_port), deployment_id))
-                    # Fix 10: autocommit=True: no explicit commit needed
-                    conn.close()
+                    with get_db_connection() as conn:
+                        with conn.cursor() as cur:
+                            cur.execute("UPDATE deployments SET port = %s WHERE deployment_id = %s;", (int(
+                                first_port), deployment_id))
             except Exception as e:
                 logger.warning(f"Failed to extract exposed port: {e}")
 
@@ -339,12 +333,25 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
     workspace = f"/tmp/workspace_{deployment_id}"
     try:
         clone_url = repo_url
+        github_secret_name = None
         if repo_url.startswith("https://github.com/"):
             token = get_github_app_token(repo_url)
             if token:
-                clone_url = clone_url.replace("https://github.com/", f"https://x-access-token:{token}@github.com/")
+                clone_url = repo_url.replace("https://github.com/", f"https://x-access-token:{token}@github.com/")
+                github_secret_name = f"git-token-{deployment_id[:8]}"
+                secret = client.V1Secret(
+                    metadata=client.V1ObjectMeta(name=github_secret_name, namespace="shipzen-build"),
+                    string_data={"GITHUB_TOKEN": token}
+                )
+                try:
+                    core_v1.create_namespaced_secret(namespace="shipzen-build", body=secret)
+                except ApiException as e:
+                    if e.status == 409:
+                        core_v1.replace_namespaced_secret(name=github_secret_name, namespace="shipzen-build", body=secret)
+                    else:
+                        raise
 
-        # Shallow clone to detect builder
+        # Shallow clone to detect builder (worker local)
         os.makedirs(workspace, exist_ok=True)
         subprocess.run(["git", "clone", "--depth=1", "--filter=blob:none", "--sparse", "--branch",
                        branch, clone_url, workspace], check=True, timeout=120)
@@ -361,32 +368,36 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
                     new_port = cfg.get("port")
                     new_health = cfg.get("health_check_path")
                     if new_port or new_health:
-                        conn = get_db_conn()
-                        with conn.cursor() as cur:
-                            if new_port and new_health:
-                                cur.execute("UPDATE deployments SET port = %s, health_check_path = %s WHERE deployment_id = %s;", (
-                                    new_port, new_health, deployment_id))
-                            elif new_port:
-                                cur.execute(
-                                    "UPDATE deployments SET port = %s WHERE deployment_id = %s;", (new_port, deployment_id))
-                            elif new_health:
-                                cur.execute(
-                                    "UPDATE deployments SET health_check_path = %s WHERE deployment_id = %s;", (new_health, deployment_id))
-                        conn.close()
+                        with get_db_connection() as conn:
+                            with conn.cursor() as cur:
+                                if new_port and new_health:
+                                    cur.execute("UPDATE deployments SET port = %s, health_check_path = %s WHERE deployment_id = %s;", (
+                                        new_port, new_health, deployment_id))
+                                elif new_port:
+                                    cur.execute(
+                                        "UPDATE deployments SET port = %s WHERE deployment_id = %s;", (new_port, deployment_id))
+                                elif new_health:
+                                    cur.execute(
+                                        "UPDATE deployments SET health_check_path = %s WHERE deployment_id = %s;", (new_health, deployment_id))
 
         # SPA detection
         package_json_path = os.path.join(workspace, "package.json")
         if os.path.exists(package_json_path):
-            with open(package_json_path, 'r') as f:
-                pj = json.load(f)
-            scripts = pj.get("scripts", {})
-            deps = {**pj.get("dependencies", {}), **
-                    pj.get("devDependencies", {})}
-            if "start" not in scripts:
-                if any(m in deps for m in ["vite", "react-scripts", "vue", "svelte", "astro"]) or ("build" in scripts):
-                    overrides["inject_server_js"] = True
-            if "build" in scripts:
-                overrides["bp_node_run_scripts"] = "build"
+            if os.path.getsize(package_json_path) > 1024 * 1024:
+                logger.warning(f"package.json too large to parse for {deployment_id}")
+            else:
+                try:
+                    with open(package_json_path, 'r') as f:
+                        pj = json.load(f)
+                    scripts = pj.get("scripts", {})
+                    deps = {**pj.get("dependencies", {}), **pj.get("devDependencies", {})}
+                    if "start" not in scripts:
+                        if any(m in deps for m in ["vite", "react-scripts", "vue", "svelte", "astro"]) or ("build" in scripts):
+                            overrides["inject_server_js"] = True
+                    if "build" in scripts:
+                        overrides["bp_node_run_scripts"] = "build"
+                except json.JSONDecodeError:
+                    pass
 
         # Builder detection
         builders = [DockerfileBuilder(), RailpackBuilder(), BuildpackBuilder()]
@@ -421,8 +432,12 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
             logger.warning(f"Could not ensure ECR repository exists: {e}")
             # Non-fatal — the build may still succeed if the repo was created externally
 
+        if github_secret_name:
+            overrides["github_secret_name"] = github_secret_name
+
+        # Pass repo_url to the builder, not clone_url, so the K8s manifest doesn't get the plaintext token
         manifest = selected_builder.generate_job_manifest(
-            deployment_id, clone_url, branch, image_name, overrides)
+            deployment_id, repo_url, branch, image_name, overrides)
         job_name = manifest["metadata"]["name"]
 
         # Create Job
@@ -456,6 +471,11 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
         shipzen_dlq_depth.inc()
     finally:
         shutil.rmtree(workspace, ignore_errors=True)
+        if github_secret_name:
+            try:
+                core_v1.delete_namespaced_secret(name=github_secret_name, namespace="shipzen-build")
+            except Exception as e:
+                logger.warning(f"Failed to delete GitHub token secret {github_secret_name}: {e}")
         _semaphore.release()
 
 

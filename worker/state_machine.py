@@ -19,12 +19,10 @@ class DeploymentState:
     DLQ = "DLQ"
 
 
+from worker.database import get_db_connection
+
 class StateMachine:
     def __init__(self):
-        # Fix #4: connection is created lazily via _get_conn() which reconnects
-        # on any broken-pipe / interface-error rather than using one persistent
-        # connection for the entire process lifetime.
-        self._conn = None
         self._redis = None
 
     def _get_redis(self):
@@ -33,38 +31,13 @@ class StateMachine:
                 host=config.REDIS_HOST, port=config.REDIS_PORT)
         return self._redis
 
-    def _get_conn(self):
-        """
-        Returns a live connection, reconnecting automatically if the previous
-        one was closed by the server (idle timeout, DB restart, network blip).
-        """
-        if self._conn is None or self._conn.closed:
-            logger.info("Opening new DB connection...")
-            self._conn = psycopg2.connect(config.DATABASE_URL)
-            self._conn.autocommit = True
-        else:
-            # Cheap liveness check — raises if the connection is broken
-            try:
-                with self._conn.cursor() as cur:
-                    cur.execute("SELECT 1")
-            except psycopg2.Error:
-                logger.warning("DB connection stale, reconnecting...")
-                try:
-                    self._conn.close()
-                except Exception:
-                    pass
-                self._conn = psycopg2.connect(config.DATABASE_URL)
-                self._conn.autocommit = True
-        return self._conn
-
     def update_state(self, deployment_id: str, new_state: str, error_msg: str = None):
         """
         Idempotent state update.
         Kubernetes state is not authoritative; PostgreSQL is.
         """
-        for attempt in range(2):
-            try:
-                conn = self._get_conn()
+        try:
+            with get_db_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
                         UPDATE deployments
@@ -77,50 +50,29 @@ class StateMachine:
                         logger.warning(
                             f"Deployment {deployment_id} not found in DB when transitioning to {new_state}")
 
-                # Publish state update to Redis
-                try:
-                    payload = json.dumps(
-                        {"state": new_state, "last_error": error_msg})
-                    self._get_redis().publish(
-                        f"shipzen:status:{deployment_id}", payload)
-                except Exception as e:
-                    logger.warning(f"Failed to publish status to Redis: {e}")
+            # Publish state update to Redis
+            try:
+                payload = json.dumps(
+                    {"state": new_state, "last_error": error_msg})
+                self._get_redis().publish(
+                    f"shipzen:status:{deployment_id}", payload)
+            except Exception as e:
+                logger.warning(f"Failed to publish status to Redis: {e}")
 
-                # Fix #24: was print(), now uses structured logger
-                logger.info(
-                    f"Deployment {deployment_id} transition -> {new_state}")
-                break
-            except psycopg2.OperationalError as e:
-                if attempt == 0:
-                    logger.warning(
-                        f"DB connection dropped during update_state, retrying: {e}")
-                    if self._conn:
-                        try:
-                            self._conn.close()
-                        except Exception:
-                            pass
-                    self._conn = None
-                else:
-                    raise
+            logger.info(
+                f"Deployment {deployment_id} transition -> {new_state}")
+        except psycopg2.OperationalError as e:
+            logger.warning(f"DB connection dropped during update_state: {e}")
+            raise
 
     def get_deployment(self, deployment_id: str):
-        for attempt in range(2):
-            try:
-                conn = self._get_conn()
+        try:
+            with get_db_connection() as conn:
                 with conn.cursor(cursor_factory=DictCursor) as cur:
                     cur.execute(
                         "SELECT * FROM deployments WHERE deployment_id = %s;", (deployment_id,))
                     row = cur.fetchone()
                     return dict(row) if row else None
-            except psycopg2.OperationalError as e:
-                if attempt == 0:
-                    logger.warning(
-                        f"DB connection dropped during get_deployment, retrying: {e}")
-                    if self._conn:
-                        try:
-                            self._conn.close()
-                        except Exception:
-                            pass
-                    self._conn = None
-                else:
-                    raise
+        except psycopg2.OperationalError as e:
+            logger.warning(f"DB connection dropped during get_deployment: {e}")
+            raise
