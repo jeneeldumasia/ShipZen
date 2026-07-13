@@ -23,6 +23,11 @@ resource "helm_release" "argocd" {
     value = "15s"
   }
 
+  set {
+    name  = "server.extraArgs[0]"
+    value = "--insecure"
+  }
+
   depends_on = [time_sleep.wait_for_cluster_auth, helm_release.kube_prometheus_stack]
 }
 

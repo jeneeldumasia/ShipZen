@@ -12,6 +12,7 @@ resources:
   - shipzen-auth-secret.yaml
   - gateway.yaml
   - grafana-route.yaml
+  - argocd-route.yaml
   - kyverno-exception.yaml
   - build-namespace-exception.yaml
   - grafana-dashboards.yaml
