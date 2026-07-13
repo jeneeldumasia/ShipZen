@@ -13,9 +13,7 @@ from cachetools import TTLCache
 logger = logging.getLogger(__name__)
 
 GITHUB_ENABLED = os.getenv("GITHUB_ENABLED", "false").lower() == "true"
-# DEV_MODE allows the stub user bypass — must be explicitly opted-in.
-# Never set SHIPZEN_DEV_MODE=true in production.
-DEV_MODE = os.getenv("SHIPZEN_DEV_MODE", "false").lower() == "true"
+
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -41,12 +39,6 @@ async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> User:
     if not GITHUB_ENABLED:
-        if DEV_MODE:
-            logger.warning(
-                "SHIPZEN_DEV_MODE is true — using stub admin user. Never use in production.")
-            from database import get_or_create_user
-            db_user = await asyncio.to_thread(get_or_create_user, "local-dev-user", "admin@shipzen.local")
-            return User(user_id=db_user["id"], role=db_user["role"])
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Authentication is not configured. Set GITHUB_ENABLED=true.",

@@ -233,7 +233,12 @@ def create_project(request: Request, body: CreateProjectRequest, current_user: U
 
 @app.get("/projects", tags=["Projects"])
 @limiter.limit("100/minute")
-def list_projects(request: Request, current_user: User = Depends(get_current_user)):
+def list_projects(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(get_current_user)
+):
     """List all non-deleted (non-Terminating) projects."""
     try:
         with get_connection() as conn:
@@ -245,8 +250,9 @@ def list_projects(request: Request, current_user: User = Depends(get_current_use
                         FROM projects p
                         LEFT JOIN users u ON p.owner_id = u.id
                         WHERE p.deleted_at IS NULL 
-                        ORDER BY p.created_at DESC;
-                        """
+                        ORDER BY p.created_at DESC
+                        LIMIT %s OFFSET %s;
+                        """, (limit, offset)
                     )
                 else:
                     cur.execute(
@@ -255,9 +261,10 @@ def list_projects(request: Request, current_user: User = Depends(get_current_use
                         FROM projects p
                         LEFT JOIN users u ON p.owner_id = u.id
                         WHERE p.deleted_at IS NULL AND p.owner_id = %s 
-                        ORDER BY p.created_at DESC;
+                        ORDER BY p.created_at DESC
+                        LIMIT %s OFFSET %s;
                         """,
-                        (current_user.user_id,)
+                        (current_user.user_id, limit, offset)
                     )
                 return [_serialize(dict(r)) for r in cur.fetchall()]
     except Exception as e:
@@ -445,6 +452,15 @@ class AnalyzeRequest(BaseModel):
     repo_url: str
     branch: str = "main"
 
+    @field_validator("repo_url")
+    @classmethod
+    def validate_repo_url(cls, v: str) -> str:
+        if not _REPO_URL_RE.match(v):
+            raise ValueError(
+                "repo_url must be an https:// URL or git@host:org/repo.git SSH URL"
+            )
+        return v
+
 
 @app.post("/projects/analyze", tags=["Projects"])
 @limiter.limit("5/minute")
@@ -555,7 +571,7 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
             "image_name":    image_uri,
             "queued_at":     queued_at,
             "retries":       "0",
-        })
+        }, maxlen=10000)
     except Exception as e:
         logger.error(f"Failed to enqueue deployment {deployment_id}: {e}")
         try:
@@ -627,7 +643,7 @@ def rollback_deployment(request: Request, project_id: str, project: dict = Depen
             "queued_at":     str(time.time()),
             "retries":       "0",
             "is_rollback":   "true",
-        })
+        }, maxlen=10000)
         r.publish(f"shipzen:status:{deployment_id}", json.dumps(
             {"state": "Queued", "last_error": None}))
     except Exception as e:
@@ -1141,6 +1157,77 @@ def get_github_branches(request: Request, repo_url: str):
         logger.error(f"Error fetching branches for {repo_url}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch branches")
 
+# ── Secrets ───────────────────────────────────────────────────────────────────
+
+class PutSecretRequest(BaseModel):
+    key: str
+    value: str
+
+@app.get("/projects/{project_id}/secrets", tags=["Secrets"])
+@limiter.limit("50/minute")
+def list_secrets(request: Request, project_id: str, project: dict = Depends(verify_project_access)):
+    """List all secret keys for a project (values are redacted)."""
+    sm = boto3.client('secretsmanager', region_name=os.getenv("AWS_REGION", "us-east-1"))
+    secret_id = f"shipzen/{project['name']}/"
+    try:
+        resp = sm.get_secret_value(SecretId=secret_id)
+        secrets_dict = json.loads(resp['SecretString'])
+        return {"secrets": [{"key": k, "value": "********"} for k in secrets_dict.keys()]}
+    except sm.exceptions.ResourceNotFoundException:
+        return {"secrets": []}
+    except Exception as e:
+        logger.error(f"Failed to list secrets: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve secrets")
+
+@app.post("/projects/{project_id}/secrets", status_code=200, tags=["Secrets"])
+@limiter.limit("20/minute")
+def put_secret(request: Request, project_id: str, body: PutSecretRequest, project: dict = Depends(verify_project_access)):
+    """Add or update a secret for a project."""
+    sm = boto3.client('secretsmanager', region_name=os.getenv("AWS_REGION", "us-east-1"))
+    secret_id = f"shipzen/{project['name']}/"
+    secrets_dict = {}
+    
+    try:
+        resp = sm.get_secret_value(SecretId=secret_id)
+        secrets_dict = json.loads(resp['SecretString'])
+    except sm.exceptions.ResourceNotFoundException:
+        pass
+    except Exception as e:
+        logger.error(f"Failed to fetch secrets for update: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update secrets")
+        
+    secrets_dict[body.key] = body.value
+    
+    try:
+        try:
+            sm.put_secret_value(SecretId=secret_id, SecretString=json.dumps(secrets_dict))
+        except sm.exceptions.ResourceNotFoundException:
+            sm.create_secret(Name=secret_id, SecretString=json.dumps(secrets_dict))
+        return {"message": "Secret updated successfully", "key": body.key}
+    except Exception as e:
+        logger.error(f"Failed to save secret: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save secret")
+
+@app.delete("/projects/{project_id}/secrets/{key}", status_code=200, tags=["Secrets"])
+@limiter.limit("20/minute")
+def delete_secret(request: Request, project_id: str, key: str, project: dict = Depends(verify_project_access)):
+    """Delete a secret key from a project."""
+    sm = boto3.client('secretsmanager', region_name=os.getenv("AWS_REGION", "us-east-1"))
+    secret_id = f"shipzen/{project['name']}/"
+    
+    try:
+        resp = sm.get_secret_value(SecretId=secret_id)
+        secrets_dict = json.loads(resp['SecretString'])
+        if key in secrets_dict:
+            del secrets_dict[key]
+            sm.put_secret_value(SecretId=secret_id, SecretString=json.dumps(secrets_dict))
+        return {"message": "Secret deleted successfully"}
+    except sm.exceptions.ResourceNotFoundException:
+        raise HTTPException(status_code=404, detail="Secret not found")
+    except Exception as e:
+        logger.error(f"Failed to delete secret: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete secret")
+
 # ── Webhooks ──────────────────────────────────────────────────────────────────
 
 
@@ -1215,14 +1302,13 @@ async def github_webhook(request: Request, project_id: str):
                 last_deploy = cur.fetchone()
 
                 if not last_deploy:
-                    raise HTTPException(
-                        status_code=400, detail="Project has no existing deployments to inherit configuration from")
-
-                if last_deploy["repo_url"] != repo_url:
-                    raise HTTPException(
-                        status_code=403, detail="Webhook repository does not match project's repository")
-
-                port = last_deploy["port"]
+                    # Fallback for the first deployment
+                    port = 8080
+                else:
+                    if last_deploy["repo_url"] != repo_url:
+                        raise HTTPException(
+                            status_code=403, detail="Webhook repository does not match project's repository")
+                    port = last_deploy["port"]
 
                 cur.execute(
                     """
@@ -1249,7 +1335,7 @@ async def github_webhook(request: Request, project_id: str):
             "image_name":    image_uri,
             "queued_at":     queued_at,
             "retries":       "0",
-        })
+        }, maxlen=10000)
     except Exception as e:
         logger.error(
             f"Failed to enqueue webhook deployment {deployment_id}: {e}")
@@ -1386,7 +1472,7 @@ async def github_app_webhook(request: Request):
                 "image_name":    image_uri,
                 "queued_at":     queued_at,
                 "retries":       "0",
-            })
+            }, maxlen=10000)
         except Exception as e:
             logger.error(
                 f"Failed to enqueue webhook deployment {deployment_id}: {e}")

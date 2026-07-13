@@ -229,24 +229,84 @@ def delete_namespace(namespace: str):
 @shipzen_reconciliation_duration_seconds.time()
 def reconcile():
     logger.info("Starting reconciliation loop...")
-    # Outer connection: read-only project list fetch only.
-    # Each project then gets its own connection so a failure in one project
-    # cannot roll back or corrupt the state of another.
     conn = get_db_connection()
     try:
         with conn.cursor(cursor_factory=DictCursor) as cur:
+            # Sweeper: Fail deployments stuck in Queued or Building for over an hour
+            cur.execute("""
+                UPDATE deployments 
+                SET state = 'Failed', last_error = 'Deployment timed out in Queued/Building state' 
+                WHERE state IN ('Queued', 'Building') 
+                AND updated_at < NOW() - INTERVAL '60 minutes';
+            """)
+            conn.commit()
+
             cur.execute("SELECT * FROM projects;")
             projects = [dict(row) for row in cur.fetchall()]
     finally:
         close_db_connection(conn)
 
+    # 1. Fetch Global Kubernetes State (O(1) API calls instead of O(N))
+    global_deps = {}
+    global_svcs = {}
+    global_routes = {}
+    try:
+        _continue = None
+        while True:
+            all_deps = k8s_apps_api.list_deployment_for_all_namespaces(_continue=_continue)
+            for d in all_deps.items:
+                global_deps.setdefault(d.metadata.namespace, {})[d.metadata.name] = d
+            _continue = all_deps.metadata._continue
+            if not _continue:
+                break
+
+        _continue = None
+        while True:
+            all_svcs = k8s_core_api.list_service_for_all_namespaces(_continue=_continue)
+            for s in all_svcs.items:
+                global_svcs.setdefault(s.metadata.namespace, set()).add(s.metadata.name)
+            _continue = all_svcs.metadata._continue
+            if not _continue:
+                break
+
+        try:
+            _continue = None
+            while True:
+                all_routes = k8s_custom_api.list_cluster_custom_object(
+                    "gateway.networking.k8s.io", "v1", "httproutes", _continue=_continue)
+                for r in all_routes.get("items", []):
+                    global_routes.setdefault(r['metadata']['namespace'], set()).add(r['metadata']['name'])
+                _continue = all_routes.get("metadata", {}).get("continue")
+                if not _continue:
+                    break
+        except ApiException:
+            pass
+
+        global_ext_secrets = {}
+        try:
+            _continue = None
+            while True:
+                all_secrets = k8s_custom_api.list_cluster_custom_object(
+                    "external-secrets.io", "v1beta1", "externalsecrets", _continue=_continue)
+                for r in all_secrets.get("items", []):
+                    global_ext_secrets.setdefault(r['metadata']['namespace'], set()).add(r['metadata']['name'])
+                _continue = all_secrets.get("metadata", {}).get("continue")
+                if not _continue:
+                    break
+        except ApiException:
+            pass
+
+    except Exception as e:
+        logger.error(f"Failed to fetch global K8s state: {e}")
+        return
+
     import concurrent.futures
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        futures = [executor.submit(_reconcile_project, dict(row)) for row in projects]
+        futures = [executor.submit(_reconcile_project, dict(row), global_deps, global_svcs, global_routes, global_ext_secrets) for row in projects]
         concurrent.futures.wait(futures)
 
 
-def _reconcile_project(project_data: dict):
+def _reconcile_project(project_data: dict, global_deps: dict, global_svcs: dict, global_routes: dict, global_ext_secrets: dict):
     project_data["_id"] = project_data.pop("id")
 
     # Per-project connection — failure here cannot affect other projects
@@ -308,32 +368,25 @@ def _reconcile_project(project_data: dict):
                     project_conn.commit()
                 else:
                     reconcile_deployments(
-                        project_conn, project_cur, project)
+                        project_conn, project_cur, project, global_deps, global_svcs, global_routes, global_ext_secrets)
 
     except Exception as e:
         logger.error(f"Error reconciling project {row['id']}: {e}")
         try:
-            project_conn.rollback()
-        except Exception:
-            pass
-        try:
-            err_conn = get_db_connection()
-            try:
-                with err_conn.cursor() as err_cur:
-                    err_cur.execute(
-                        "UPDATE projects SET status = %s WHERE id = %s;",
-                        (ProjectStatus.FAILED.value, project_data['_id'])
-                    )
-                err_conn.commit()
-            finally:
-                close_db_connection(err_conn)
+            # Fix 3: Re-use project_conn to set FAILED state and avoid Connection Pool Exhaustion Deadlock
+            with project_conn.cursor() as err_cur:
+                err_cur.execute(
+                    "UPDATE projects SET status = %s WHERE id = %s;",
+                    (ProjectStatus.FAILED.value, project_data['_id'])
+                )
+            project_conn.commit()
         except Exception as rb_err:
             logger.error(f"Failed to set FAILED state: {rb_err}")
     finally:
         close_db_connection(project_conn)
 
 
-def reconcile_deployments(conn, cur, project):
+def reconcile_deployments(conn, cur, project, global_deps, global_svcs, global_routes, global_ext_secrets):
     """Reconciles Deployments, Services, and HTTPRoutes for a ready project namespace."""
     cur.execute("SELECT * FROM deployments WHERE project_id = %s;",
                 (project.id,))
@@ -341,35 +394,37 @@ def reconcile_deployments(conn, cur, project):
                       for row in cur.fetchall()}
 
     try:
-        k8s_deps = k8s_apps_api.list_namespaced_deployment(
-            namespace=project.namespace)
-        k8s_dep_names = {d.metadata.name: d for d in k8s_deps.items}
+        k8s_dep_names = global_deps.get(project.namespace, {})
+        k8s_svc_names = global_svcs.get(project.namespace, set())
+        k8s_route_names = global_routes.get(project.namespace, set())
 
-        k8s_svcs = k8s_core_api.list_namespaced_service(
-            namespace=project.namespace)
-        k8s_svc_names = {s.metadata.name for s in k8s_svcs.items}
-
-        try:
-            k8s_routes = k8s_custom_api.list_namespaced_custom_object(
-                "gateway.networking.k8s.io", "v1", namespace=project.namespace, plural="httproutes"
-            )
-            k8s_route_names = {r['metadata']['name']
-                               for r in k8s_routes.get('items', [])}
-        except ApiException:
-            k8s_route_names = set()
+        k8s_ext_secret_names = global_ext_secrets.get(project.namespace, set())
 
         # 1. Missing or Drifted Deployments
         for d_id, db_dep in db_deployments.items():
             if db_dep['state'] in ['Running', 'Verifying', 'Deploying']:
+                k8s_dep = k8s_dep_names.get(d_id)
+                drifted = False
+                
+                if k8s_dep:
+                    # Check for deep configuration drift
+                    k8s_replicas = k8s_dep.spec.replicas if k8s_dep.spec.replicas is not None else 1
+                    db_replicas = db_dep.get('replicas', 1)
+                    k8s_image = k8s_dep.spec.template.spec.containers[0].image if k8s_dep.spec.template.spec.containers else None
+                    if k8s_replicas != db_replicas or k8s_image != db_dep.get('image_uri'):
+                        drifted = True
+                
                 missing_resources = (
-                    d_id not in k8s_dep_names or
+                    not k8s_dep or
                     f"{d_id}-svc" not in k8s_svc_names or
-                    f"{d_id}-route" not in k8s_route_names
+                    f"{d_id}-route" not in k8s_route_names or
+                    f"{d_id}-secrets" not in k8s_ext_secret_names
                 )
-                if missing_resources:
+                
+                if missing_resources or drifted:
                     shipzen_drift_total.inc()
                     logger.warning(
-                        f"Drift: Deployment {d_id} or its resources missing in K8s. Recreating...")
+                        f"Drift: Deployment {d_id} is missing or drifted in K8s. Reconciling...")
                     template = jinja_env.get_template("app-deployment.yaml.j2")
                     manifests = template.render(
                         deployment_name=d_id,
@@ -382,7 +437,11 @@ def reconcile_deployments(conn, cur, project):
                         health_check_path=db_dep.get('health_check_path', '/')
                     )
                     apply_manifests(manifests)
-                else:
+                    
+                    if not k8s_dep:
+                        continue # Can't check replicas yet
+                
+                if k8s_dep:
                     k8s_dep = k8s_dep_names[d_id]
                     ready_replicas = k8s_dep.status.ready_replicas or 0
                     if ready_replicas == 0 and db_dep['state'] == 'Running':
@@ -400,12 +459,32 @@ def reconcile_deployments(conn, cur, project):
                         except Exception as pub_e:
                             logger.warning(
                                 f"Failed to publish to Redis: {pub_e}")
+                    elif ready_replicas == 0 and db_dep['state'] in ['Deploying', 'Verifying']:
+                        import datetime
+                        time_since_update = (datetime.datetime.now(datetime.timezone.utc) - db_dep['updated_at'].astimezone(datetime.timezone.utc)).total_seconds()
+                        if time_since_update > 300:
+                            shipzen_drift_total.inc()
+                            logger.warning(f"Drift: Deployment {d_id} timed out in {db_dep['state']} state.")
+                            cur.execute(
+                                "UPDATE deployments SET state = %s, last_error = %s WHERE deployment_id = %s;",
+                                ('Failed', 'Deployment timed out / CrashLoopBackOff', d_id)
+                            )
+                            conn.commit()
+                            try:
+                                _redis_client.publish(f"shipzen:status:{d_id}", json.dumps(
+                                    {"state": "Failed", "last_error": "Deployment timed out / CrashLoopBackOff"}))
+                            except Exception as pub_e:
+                                logger.warning(f"Failed to publish to Redis: {pub_e}")
                     elif ready_replicas > 0 and db_dep['state'] in ['Deploying', 'Verifying']:
                         logger.info(
                             f"Deployment {d_id} is now Running (Ready Replicas: {ready_replicas})")
                         cur.execute(
                             "UPDATE deployments SET state = %s, last_error = NULL WHERE deployment_id = %s;",
                             ('Running', d_id)
+                        )
+                        cur.execute(
+                            "UPDATE deployments SET replicas = 0 WHERE project_id = %s AND deployment_id != %s AND state = 'Running' AND replicas > 0;",
+                            (project.id, d_id)
                         )
                         conn.commit()
                         shipzen_deployment_success_total.inc()
@@ -418,7 +497,7 @@ def reconcile_deployments(conn, cur, project):
 
         # 2. Orphan Resources Cleanup
         # States that indicate a live or in-flight deployment — never garbage collect these.
-        _LIVE_STATES = {'Running', 'Verifying', 'Deploying', 'Queued', 'Building', 'Failed', 'DLQ'}
+        _LIVE_STATES = {'Running', 'Verifying', 'Deploying', 'Queued', 'Building'}
         for k8s_name in k8s_dep_names.keys():
             if k8s_name not in db_deployments or db_deployments[k8s_name]['state'] not in _LIVE_STATES:
                 shipzen_drift_total.inc()

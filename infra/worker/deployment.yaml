@@ -92,7 +92,11 @@ spec:
             - mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
               name: aws-iam-token
               readOnly: true
+            - mountPath: /tmp
+              name: workspace-vol
       volumes:
+        - name: workspace-vol
+          emptyDir: {}
         - name: aws-iam-token
           projected:
             defaultMode: 420
