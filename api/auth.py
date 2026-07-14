@@ -49,6 +49,11 @@ async def get_current_user(
 
     # Local Dev Bypass
     if token == "stub-token":
+        if os.getenv("ENVIRONMENT") != "development":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Stub authentication is disabled in production.",
+            )
         from database import get_or_create_user
         import asyncio
         db_user = await asyncio.to_thread(get_or_create_user, "local-dev-user", "local-dev@example.com")

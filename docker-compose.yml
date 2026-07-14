@@ -40,6 +40,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      ENVIRONMENT: development
       DATABASE_URL: postgresql://shipzen:shipzen-local@postgres:5432/shipzen
       REDIS_HOST: redis
       REDIS_PORT: "6379"

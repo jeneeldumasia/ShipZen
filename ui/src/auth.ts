@@ -13,7 +13,7 @@ if (process.env.GITHUB_CLIENT_ID) {
       checks: ["none"],
     })
   )
-} else {
+} else if (process.env.NODE_ENV !== "production") {
   // Local Dev / Missing Auth0 fallback
   providers.push(
     CredentialsProvider({
@@ -31,6 +31,8 @@ if (process.env.GITHUB_CLIENT_ID) {
       }
     })
   )
+} else {
+  throw new Error("FATAL: GITHUB_CLIENT_ID is missing in production. Refusing to fallback to insecure Stub Auth.");
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
