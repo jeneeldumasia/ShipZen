@@ -31,8 +31,6 @@ if (process.env.GITHUB_CLIENT_ID) {
       }
     })
   )
-} else {
-  throw new Error("FATAL: GITHUB_CLIENT_ID is missing in production. Refusing to fallback to insecure Stub Auth.");
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({

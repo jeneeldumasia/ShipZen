@@ -8,6 +8,8 @@ export const dynamic = "force-dynamic";
 export default function LandingPage() {
   const hasGithub = !!process.env.GITHUB_CLIENT_ID;
 
+  const isDev = process.env.NODE_ENV !== "production";
+
   return (
     <div className="flex flex-col min-h-screen bg-canvas-bg overflow-hidden relative selection:bg-brand/20 selection:text-text-primary">
       {/* Floating Glass Navigation */}
@@ -48,7 +50,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <LoginButton hasGithub={hasGithub} />
+          <LoginButton hasGithub={hasGithub} isDev={isDev} />
         </div>
       </main>
 
