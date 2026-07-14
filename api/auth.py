@@ -49,7 +49,10 @@ async def get_current_user(
 
     # Local Dev Bypass
     if token == "stub-token":
-        user = User(user_id="local-dev-user", role="admin")
+        from database import get_or_create_user
+        import asyncio
+        db_user = await asyncio.to_thread(get_or_create_user, "local-dev-user", "local-dev@example.com")
+        user = User(user_id="local-dev-user", role=db_user["role"])
         cache_key = hashlib.sha256(token.encode()).hexdigest()
         _token_cache[cache_key] = user
         return user
