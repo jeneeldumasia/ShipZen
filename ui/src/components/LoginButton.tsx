@@ -9,9 +9,9 @@ export function LoginButton({ hasGithub }: { hasGithub: boolean }) {
   const handleSignIn = async () => {
     setIsLoading(true);
     if (hasGithub) {
-      await signIn("github", { callbackUrl: "/" });
+      await signIn("github", { callbackUrl: "/dashboard" });
     } else {
-      await signIn("credentials", { username: "admin", callbackUrl: "/" });
+      await signIn("credentials", { username: "admin", callbackUrl: "/dashboard" });
     }
   };
 

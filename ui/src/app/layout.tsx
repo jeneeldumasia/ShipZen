@@ -32,6 +32,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     }
   }
 
+  if (!session) {
+    return (
+      <html lang="en" suppressHydrationWarning>
+        <body className="bg-canvas-bg min-h-screen antialiased">
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+            {children}
+            <Toaster position="bottom-right" theme="system" />
+          </ThemeProvider>
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="bg-mesh min-h-screen antialiased">

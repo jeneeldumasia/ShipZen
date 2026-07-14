@@ -1,71 +1,109 @@
-import Link from "next/link";
-import { Plus, FolderGit2, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
-import { api, Project } from "@/lib/api";
-import { StatusBadge } from "@/components/StatusBadge";
-import { MetricCard } from "@/components/MetricCard";
-import { EmptyState } from "@/components/EmptyState";
-import { PageHeader } from "@/components/PageHeader";
+import { LoginButton } from "@/components/LoginButton";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Dashboard" };
 
-async function getProjects(): Promise<Project[]> {
-  try { return await api.projects.list(); }
-  catch { return []; }
-}
-
-export default async function DashboardPage() {
-  const projects = await getProjects();
-  
-  // Intelligent greeting based on time
-  const hour = new Date().getHours();
-  let greeting = "Good evening";
-  if (hour < 12) greeting = "Good morning";
-  else if (hour < 18) greeting = "Good afternoon";
-
-  const allReady = projects.every(p => p.status === "Ready");
-  const notReadyCount = projects.filter(p => p.status !== "Ready").length;
-  const systemStatus = allReady ? "All systems operational." : `${notReadyCount} project${notReadyCount > 1 ? 's' : ''} need${notReadyCount === 1 ? 's' : ''} attention.`;
+export default function LandingPage() {
+  const hasGithub = !!(process.env.GITHUB_CLIENT_ID || process.env.NODE_ENV === "production");
 
   return (
-    <div className="w-full flex flex-col items-center justify-center min-h-[70vh] animate-fade-in">
-      {/* Intelligent Greeting */}
-      <div className="text-center mb-24">
-        <h1 className="text-5xl font-display font-bold text-text-primary tracking-tighter mb-4">{greeting}.</h1>
-        <p className="text-lg text-text-secondary font-serif italic tracking-wide">{systemStatus}</p>
+    <div className="flex min-h-screen bg-canvas-bg overflow-hidden relative">
+      {/* Theme Toggle in Top Right */}
+      <div className="absolute top-6 right-8 z-50">
+        <ThemeToggle />
       </div>
 
-      {/* The Canvas (Projects as Minimalist Blocks) */}
-      <div className="w-full max-w-4xl">
-        {projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center text-center opacity-80 mt-12">
-            <p className="text-2xl font-display text-text-primary tracking-tight mb-4">No Projects Found</p>
-            <p className="text-sm text-text-secondary mb-8 max-w-sm">Deploy your first application to get started.</p>
-            <Link href="/projects/new" className="btn-primary">
-              <Plus size={16} />
-              Create Project
-            </Link>
+      {/* LEFT SIDE: Marketing / Info */}
+      <div className="hidden lg:flex w-1/2 flex-col justify-between p-12 border-r border-canvas-border/50 relative">
+        {/* Subtle Background Glow */}
+        <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center opacity-30 dark:opacity-20">
+          <div className="h-[40rem] w-[40rem] rounded-full bg-brand/10 blur-[100px]" />
+        </div>
+
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand shadow-md">
+            <svg
+              className="h-5 w-5 text-canvas-bg"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {projects.map((p) => (
-              <Link 
-                href={`/projects/${p.id}`} 
-                key={p.id}
-                className="group relative flex flex-col items-center justify-center py-16 px-8 border border-transparent hover:border-canvas-border transition-all duration-[500ms] ease-[cubic-bezier(0.23,1,0.32,1)] hover:-translate-y-2"
+          <span className="font-display font-bold text-xl tracking-tight">ShipZen</span>
+        </div>
+
+        <div className="relative z-10 max-w-lg mt-20">
+          <h1 className="text-5xl font-display font-extrabold tracking-tight text-text-primary mb-6 leading-tight">
+            Orchestrate your cloud environments with Zen.
+          </h1>
+          <p className="text-lg text-text-secondary mb-10 leading-relaxed font-medium">
+            A secure, enterprise-grade deployment platform designed to simplify your infrastructure. 
+            Automate deployments, enforce security gates, and gain real-time observability across all your projects.
+          </p>
+
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 text-text-secondary">
+              <svg className="h-5 w-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Automated GitHub webhook integrations</span>
+            </div>
+            <div className="flex items-center gap-3 text-text-secondary">
+              <svg className="h-5 w-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Real-time deployment streaming</span>
+            </div>
+            <div className="flex items-center gap-3 text-text-secondary">
+              <svg className="h-5 w-5 text-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Synchronous ECR vulnerability scanning</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="relative z-10 text-sm text-text-secondary font-medium">
+          © {new Date().getFullYear()} Itara. All rights reserved.
+        </div>
+      </div>
+
+      {/* RIGHT SIDE: Login Form */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 relative">
+        <div className="w-full max-w-[400px]">
+          {/* Logo for mobile only */}
+          <div className="lg:hidden mb-12 flex justify-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand shadow-lg">
+              <svg
+                className="h-8 w-8 text-canvas-bg"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg"
               >
-                {/* Aura Glow on Hover */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-brand/5 blur-2xl transition-opacity duration-700 -z-10 rounded-full" />
-                
-                <h2 className="text-3xl font-display font-bold text-text-primary tracking-tight mb-3 group-hover:text-brand transition-colors">{p.name}</h2>
-                <div className="flex items-center gap-3">
-                  <StatusBadge status={p.status} size="sm" />
-                  <span className="text-[10px] font-mono text-text-secondary uppercase tracking-widest">{p.namespace}</span>
-                </div>
-              </Link>
-            ))}
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
           </div>
-        )}
+
+          <div className="text-center lg:text-left mb-10">
+            <h2 className="text-3xl font-display font-bold text-text-primary tracking-tight mb-2">
+              Welcome back
+            </h2>
+            <p className="text-text-secondary font-medium">
+              Sign in to your account to continue.
+            </p>
+          </div>
+
+          <LoginButton hasGithub={hasGithub} />
+          
+          <div className="mt-8 text-center text-xs font-semibold tracking-wide text-text-secondary/70 lg:hidden">
+            Secure, enterprise-grade deployment platform.
+          </div>
+        </div>
       </div>
     </div>
   );
