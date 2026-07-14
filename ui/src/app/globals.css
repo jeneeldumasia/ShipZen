@@ -129,3 +129,7 @@
     @apply flex flex-col gap-1 py-4 border-b border-canvas-border;
   }
 }
+
+@view-transition {
+  navigation: auto;
+}

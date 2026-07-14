@@ -13,6 +13,8 @@ import { CommandPalette } from "@/components/CommandPalette";
 import { Navigation } from "@/components/Navigation";
 import { Toaster } from "sonner";
 
+import { ViewTransitions } from 'next-view-transitions';
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   
@@ -34,37 +36,41 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   if (!session) {
     return (
-      <html lang="en" suppressHydrationWarning>
-        <body className="bg-canvas-bg min-h-screen antialiased">
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-            {children}
-            <Toaster position="bottom-right" theme="system" />
-          </ThemeProvider>
-        </body>
-      </html>
+      <ViewTransitions>
+        <html lang="en" suppressHydrationWarning>
+          <body className="bg-canvas-bg min-h-screen antialiased">
+            <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+              {children}
+              <Toaster position="bottom-right" theme="system" />
+            </ThemeProvider>
+          </body>
+        </html>
+      </ViewTransitions>
     );
   }
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="bg-mesh min-h-screen antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <Navigation />
-          {/* Pure Canvas Layout */}
-          <div className="w-full min-h-screen flex flex-col items-center pt-24 px-8">
-            <main className="flex-1 w-full max-w-5xl animate-fade-in z-10 relative">
-              {children}
-            </main>
-          </div>
-          <CommandPalette />
-          <Toaster position="bottom-right" theme="system" />
-        </ThemeProvider>
-      </body>
-    </html>
+    <ViewTransitions>
+      <html lang="en" suppressHydrationWarning>
+        <body className="bg-mesh min-h-screen antialiased">
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <Navigation />
+            {/* Pure Canvas Layout */}
+            <div className="w-full min-h-screen flex flex-col items-center pt-24 px-8">
+              <main className="flex-1 w-full max-w-5xl animate-fade-in z-10 relative">
+                {children}
+              </main>
+            </div>
+            <CommandPalette />
+            <Toaster position="bottom-right" theme="system" />
+          </ThemeProvider>
+        </body>
+      </html>
+    </ViewTransitions>
   );
 }

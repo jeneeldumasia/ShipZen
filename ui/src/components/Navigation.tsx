@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from 'next-view-transitions';
 import { auth, signOut } from "@/auth";
 import { getBaseUrl } from "@/lib/api";
 import { Terminal, LayoutDashboard, Settings, LogOut, UserRound } from "lucide-react";
@@ -72,7 +72,7 @@ export async function Navigation() {
           <form
             action={async () => {
               "use server";
-              await signOut({ redirectTo: "/login" });
+              await signOut({ redirectTo: "/" });
             }}
           >
             <button
