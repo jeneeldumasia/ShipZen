@@ -6,7 +6,7 @@ import { Terminal } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default function LandingPage() {
-  const hasGithub = !!process.env.GITHUB_CLIENT_ID;
+  const hasGithub = !!(process.env.GITHUB_CLIENT_ID || process.env.SHIPZEN_GITHUB_CLIENT_ID);
 
   const isDev = process.env.NODE_ENV !== "production";
 

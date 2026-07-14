@@ -12,7 +12,12 @@ from cachetools import TTLCache
 
 logger = logging.getLogger(__name__)
 
-GITHUB_ENABLED = os.getenv("GITHUB_ENABLED", "false").lower() == "true"
+GITHUB_ENABLED = (
+    os.getenv("GITHUB_ENABLED", "false").lower() == "true" or
+    os.getenv("SHIPZEN_GITHUB_ENABLED", "false").lower() == "true" or
+    bool(os.getenv("SHIPZEN_GITHUB_CLIENT_ID")) or
+    bool(os.getenv("GITHUB_CLIENT_ID"))
+)
 
 
 _bearer = HTTPBearer(auto_error=False)

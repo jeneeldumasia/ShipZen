@@ -5,11 +5,14 @@ import CredentialsProvider from "next-auth/providers/credentials"
 // Use GitHub if configured, otherwise use Stub Credentials
 const providers = []
 
-if (process.env.GITHUB_CLIENT_ID) {
+const githubClientId = process.env.GITHUB_CLIENT_ID || process.env.SHIPZEN_GITHUB_CLIENT_ID;
+const githubClientSecret = process.env.GITHUB_CLIENT_SECRET || process.env.SHIPZEN_GITHUB_CLIENT_SECRET;
+
+if (githubClientId && githubClientSecret) {
   providers.push(
     GitHubProvider({
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
+      clientId: githubClientId,
+      clientSecret: githubClientSecret,
       checks: ["none"],
     })
   )
@@ -35,6 +38,7 @@ if (process.env.GITHUB_CLIENT_ID) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
+  secret: process.env.AUTH_SECRET || process.env.SHIPZEN_AUTH_SECRET,
   trustHost: true,
   callbacks: {
     async jwt({ token, account }) {
