@@ -94,10 +94,15 @@ def get_or_create_user(user_id: str, email: str = None) -> dict:
                 user = cur.fetchone()
                 ADMIN_EMAILS = {"jeneeldumasia18@gmail.com", "jeneel.dumasia@iamops.io"}
                 
+                # Normalize emails to lowercase for comparison
+                check_email = email.lower() if email else None
+
                 if user:
                     user_dict = dict(user)
+                    db_email = user_dict.get('email').lower() if user_dict.get('email') else None
+                    
                     # Upgrade existing user to admin if they are in the admin emails list
-                    if user_dict['role'] != 'admin' and (email in ADMIN_EMAILS or user_dict.get('email') in ADMIN_EMAILS):
+                    if user_dict['role'] != 'admin' and (check_email in ADMIN_EMAILS or db_email in ADMIN_EMAILS):
                         cur.execute("UPDATE users SET role = 'admin' WHERE id = %s", (user_id,))
                         user_dict['role'] = 'admin'
                     return user_dict
@@ -109,7 +114,7 @@ def get_or_create_user(user_id: str, email: str = None) -> dict:
                 count = cur.fetchone()[0]
                 
                 ADMIN_EMAILS = {"jeneeldumasia18@gmail.com", "jeneel.dumasia@iamops.io"}
-                role = 'admin' if count == 0 or email in ADMIN_EMAILS else 'user'
+                role = 'admin' if count == 0 or check_email in ADMIN_EMAILS else 'user'
 
                 cur.execute(
                     "INSERT INTO users (id, email, role) VALUES (%s, %s, %s) RETURNING id, role",
