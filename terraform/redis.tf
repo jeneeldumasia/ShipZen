@@ -4,6 +4,15 @@
 # Service resolves to redis-master.shipzen-system.svc.cluster.local
 # which is the address hardcoded in worker/config.py and builder/main.py.
 
+resource "random_password" "redis_password" {
+  length  = 32
+  special = false
+}
+
+locals {
+  redis_password = var.redis_password != "" ? var.redis_password : random_password.redis_password.result
+}
+
 resource "helm_release" "redis" {
   name             = "redis"
   repository       = "oci://registry-1.docker.io/bitnamicharts"
@@ -31,7 +40,7 @@ resource "helm_release" "redis" {
   }
   set {
     name  = "auth.password"
-    value = var.redis_password
+    value = local.redis_password
   }
 
   # Ensure the master service is named "redis-master" so the DNS entry

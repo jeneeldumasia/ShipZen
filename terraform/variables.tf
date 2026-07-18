@@ -21,6 +21,7 @@ variable "grafana_password" {
 variable "redis_password" {
   description = "Redis password for authentication. Must be set for production."
   type        = string
+  default     = ""
   sensitive   = true
 }
 
