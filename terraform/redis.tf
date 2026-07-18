@@ -13,6 +13,46 @@ locals {
   redis_password = var.redis_password != "" ? var.redis_password : random_password.redis_password.result
 }
 
+resource "aws_secretsmanager_secret" "redis_password" {
+  name                    = "shipzen/redis-password"
+  recovery_window_in_days = 0
+}
+
+resource "aws_secretsmanager_secret_version" "redis_password" {
+  secret_id     = aws_secretsmanager_secret.redis_password.id
+  secret_string = local.redis_password
+}
+
+resource "null_resource" "apply_redis_external_secret" {
+  triggers = {
+    version = aws_secretsmanager_secret_version.redis_password.version_id
+  }
+  provisioner "local-exec" {
+    command = <<EOT
+      kubectl create namespace shipzen-system --dry-run=client -o yaml | kubectl apply -f -
+      cat <<EOF | aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster && kubectl apply -f -
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: redis-auth
+  namespace: shipzen-system
+spec:
+  refreshInterval: "1h"
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: redis-auth
+  data:
+    - secretKey: redis-password
+      remoteRef:
+        key: shipzen/redis-password
+EOF
+EOT
+  }
+  depends_on = [null_resource.apply_cluster_secret_store]
+}
+
 resource "helm_release" "redis" {
   name             = "redis"
   repository       = "oci://registry-1.docker.io/bitnamicharts"
@@ -39,8 +79,12 @@ resource "helm_release" "redis" {
     value = "true"
   }
   set {
-    name  = "auth.password"
-    value = local.redis_password
+    name  = "auth.existingSecret"
+    value = "redis-auth"
+  }
+  set {
+    name  = "auth.existingSecretPasswordKey"
+    value = "redis-password"
   }
 
   # Ensure the master service is named "redis-master" so the DNS entry
@@ -50,5 +94,5 @@ resource "helm_release" "redis" {
     value = "redis-master"
   }
 
-  depends_on = [time_sleep.wait_for_cluster_auth, helm_release.kyverno]
+  depends_on = [time_sleep.wait_for_cluster_auth, helm_release.kyverno, null_resource.apply_redis_external_secret]
 }
