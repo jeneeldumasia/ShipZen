@@ -40,6 +40,13 @@ spec:
                   key: url
             - name: RECONCILIATION_INTERVAL
               value: "60"
+            - name: REDIS_HOST
+              value: "redis-master.shipzen-system.svc.cluster.local"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis
+                  key: redis-password
             - name: ECR_REGISTRY
               valueFrom:
                 secretKeyRef:

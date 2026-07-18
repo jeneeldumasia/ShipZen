@@ -45,6 +45,11 @@ spec:
                   key: url
             - name: REDIS_HOST
               value: "redis-master.shipzen-system.svc.cluster.local"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis
+                  key: redis-password
             - name: STREAM_NAME
               value: "deploy_stream"
             - name: CONSUMER_GROUP
