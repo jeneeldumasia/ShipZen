@@ -20,3 +20,5 @@
 - **Dashboards:** ConfigMaps created for 4 operational Grafana dashboards.
 
 **Final Score:** 100% Ready for Staging/Production Deployment.
+
+*(Update July 18)*: Additional security audits resulted in strict environment variable gates for local authentication stubs (`ENABLE_LOCAL_STUB_AUTH`), parameterized `ADMIN_EMAILS`, and proxy-aware rate limit hardening (`X-Forwarded-For`), closing all remaining deployment blockers.

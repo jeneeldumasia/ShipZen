@@ -6,4 +6,5 @@
 **Consequences:** 
 - Allows strong schema validation, referential integrity, and ACID compliance.
 - Replaces previous MongoDB implementation.
+- System bootstrapping (such as Admin user creation) relies strictly on parameterized variables like `ADMIN_EMAILS` rather than hardcoded logic to prevent elevation of privilege vulnerabilities.
 **Conflict Resolution Policy:** Any implementations using MongoDB or NoSQL for core state will be rejected.

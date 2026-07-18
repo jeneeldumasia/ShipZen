@@ -124,3 +124,20 @@ This document tracks recently encountered infrastructure, deployment, and UI iss
 * **Issue:** Caching the fully resolved `User` object (including role) in `api/auth.py` eliminates database overhead but causes a 5-minute propagation delay when a user's role is updated via the `/admin/users/{user_id}/role` API. Demoted admins retain access until their cache TTL expires.
 * **Proposed Resolution:** Implement a global reverse-mapping dictionary (`user_id -> list[token_hashes]`) so the admin endpoint can explicitly evict tokens from the cache upon role demotion.
 
+## Production Readiness (July 18)
+
+### 25. Authentication Stub Vulnerability
+* **Issue:** The `stub-token` logic relied on a fragile `ENVIRONMENT != "development"` and `NODE_ENV !== "production"` check which could fail open if misconfigured.
+* **Resolution:** Replaced the environmental checks with a strict, explicit opt-in `ENABLE_LOCAL_STUB_AUTH=true`.
+
+### 26. Hardcoded Admin Escalation
+* **Issue:** Initial DB migrations hardcoded specific developer emails to automatically gain `admin` privileges upon login.
+* **Resolution:** Replaced the hardcoded lists with an `ADMIN_EMAILS` environment variable parameter for secure bootstrapping.
+
+### 27. Transaction Boundaries & TOCTOU in User Creation
+* **Issue:** The `get_or_create_user` method suffered from Time-of-Check to Time-of-Use race conditions with implicit psycopg2 auto-commit behaviors on connection pool exit.
+* **Resolution:** Implemented explicit `conn.commit()` and `conn.rollback()` handling tightly wrapped around the SQL execution blocks.
+
+### 28. Proxy Rate-Limit Exhaustion
+* **Issue:** The `slowapi` rate limiter fell back to `get_remote_address()`, which resolved to the Envoy Gateway internal IP, causing global rate limits to block all users.
+* **Resolution:** Appended `--proxy-headers` to Uvicorn and explicitly parsed `X-Forwarded-For` in `_user_id_or_ip`.

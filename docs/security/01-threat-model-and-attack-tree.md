@@ -34,3 +34,10 @@ The following tree outlines potential attack vectors and the implemented mitigat
   - *Mitigation:* RBAC restricts tenant runner roles. External Secrets Operator (ESO) fetches secrets just-in-time from AWS Secrets Manager.
 - **Attack Vector C2:** Secrets printed in build logs.
   - *Mitigation:* ESO mounts secrets directly into `envFrom`. Cloud Native Buildpacks restrict secret binding during image creation.
+
+### D. API & Authentication Compromise
+- **Goal:** Attacker bypasses authentication to mutate platform state or exhaust API resources.
+- **Attack Vector D1:** Bypassing GitHub OAuth using development stubs.
+  - *Mitigation:* Explicit `ENABLE_LOCAL_STUB_AUTH=true` environment variable mandated; falls closed to 503 if not set in production.
+- **Attack Vector D2:** Proxy IP Spoofing for Rate Limit Evasion.
+  - *Mitigation:* Uvicorn `--proxy-headers` configuration enforces validation of `X-Forwarded-For` from the Envoy Gateway, dropping spoofed headers.

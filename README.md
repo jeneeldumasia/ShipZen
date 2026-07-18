@@ -61,6 +61,10 @@ pip install -r api/requirements.txt
 pip install -r worker/requirements.txt
 pip install -r controller/requirements.txt
 pip install -r tests/requirements.txt
+
+# Required for local testing bypasses and admin bootstrapping
+export ENABLE_LOCAL_STUB_AUTH=true
+export ADMIN_EMAILS="admin@shipzen.local"
 ```
 
 #### Running Tests

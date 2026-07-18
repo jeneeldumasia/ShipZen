@@ -226,3 +226,8 @@ These cannot be done in code — they require configuration in GitHub or AWS IAM
 - **Deploy flow**: API → PostgreSQL → Redis stream → Worker → Builder (GHCR image) → ECR → Controller detects Running
 - **Infra**: EKS + Karpenter (builder-pool spot, tenant-pool on-demand) + ArgoCD GitOps + ESO for secrets + Cloudflare for DNS/TLS
 - **Schema bootstrap**: K8s Job mounts `schema-configmap.yaml` and runs `psql` on startup. The API also runs `init_db()` on startup as a safety net.
+
+## Recent Production Readiness Fixes (July 18 Addendum)
+- **Security**: Local auth stub requires `ENABLE_LOCAL_STUB_AUTH=true`. DB Admins injected via `ADMIN_EMAILS` env var.
+- **Networking**: CORS tightened to block `localhost` in production. Uvicorn `--proxy-headers` enabled for Envoy Gateway `X-Forwarded-For` propagation.
+- **Secrets**: `alert-secret.json` removed. Ensure all secrets are provisioned via ESO.

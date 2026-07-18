@@ -94,3 +94,12 @@ We will execute the `task.md` created this session:
 
 ## Lessons Learned (June 24)
 - **Troubleshooting Priority:** When debugging Kubernetes deployment or job failures, **ALWAYS check the cluster events first** (`kubectl get events`, `kubectl describe pod/job`) before diving into application code or IAM permissions. Do not get tunnel vision on symptoms (like UI WebSockets timing out or logs failing to load) without first verifying the root cause of the failure at the infrastructure/control plane level. In this case, missing the fact that the `shipzen-build` namespace didn't exist/was blocked by Kyverno led to hours of wasted debugging on secondary issues.
+
+## Architectural Decisions This Session (July 18)
+- **Production Readiness Fixes**:
+  - Removed local dev auth stubs in favor of a strict `ENABLE_LOCAL_STUB_AUTH=true` environment variable.
+  - Replaced hardcoded database admin emails with `ADMIN_EMAILS` environment variable.
+  - Hardened database connection logic with explicit transaction boundaries (`conn.commit()`) to solve user creation race conditions.
+  - Updated API proxy parsing to respect `X-Forwarded-For` from Envoy Gateway, mitigating rate limit exhaustion.
+  - Enforced CORS restrictions against `localhost:3000` in production.
+  - Deleted `alert-secret.json` to fully rely on ESO (External Secrets Operator).

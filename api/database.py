@@ -87,41 +87,39 @@ def get_deployments_paginated(project_id: str, limit: int = 20, cursor_updated_a
 
 def get_or_create_user(user_id: str, email: str = None) -> dict:
     """Gets a user by ID, or creates them. The first user created gets the 'admin' role."""
+    admin_emails_env = os.getenv("ADMIN_EMAILS", "")
+    ADMIN_EMAILS = {e.strip().lower() for e in admin_emails_env.split(",")} if admin_emails_env else set()
+
     with get_connection() as conn:
         try:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 cur.execute("SELECT id, role, email FROM users WHERE id = %s", (user_id,))
                 user = cur.fetchone()
-                ADMIN_EMAILS = {"jeneeldumasia18@gmail.com", "jeneel.dumasia@iamops.io"}
                 
-                # Normalize emails to lowercase for comparison
                 check_email = email.lower() if email else None
 
                 if user:
                     user_dict = dict(user)
                     db_email = user_dict.get('email').lower() if user_dict.get('email') else None
                     
-                    # Upgrade existing user to admin if they are in the admin emails list
-                    if user_dict['role'] != 'admin' and (check_email in ADMIN_EMAILS or db_email in ADMIN_EMAILS):
+                    if user_dict['role'] != 'admin' and ((check_email and check_email in ADMIN_EMAILS) or (db_email and db_email in ADMIN_EMAILS)):
                         cur.execute("UPDATE users SET role = 'admin' WHERE id = %s", (user_id,))
                         user_dict['role'] = 'admin'
+                        conn.commit()
                     return user_dict
 
-                # Fix 11: get_or_create_user has a TOCTOU race condition
-                # Use an advisory lock to prevent race condition during initial admin creation
-                cur.execute("SELECT pg_advisory_xact_lock(hashtext('users_insert_lock'));")
                 cur.execute("SELECT COUNT(*) FROM users")
                 count = cur.fetchone()[0]
                 
-                ADMIN_EMAILS = {"jeneeldumasia18@gmail.com", "jeneel.dumasia@iamops.io"}
-                role = 'admin' if count == 0 or check_email in ADMIN_EMAILS else 'user'
+                role = 'admin' if count == 0 or (check_email and check_email in ADMIN_EMAILS) else 'user'
 
                 cur.execute(
                     "INSERT INTO users (id, email, role) VALUES (%s, %s, %s) RETURNING id, role",
                     (user_id, email, role)
                 )
                 new_user = cur.fetchone()
-                return dict(new_user)
+            conn.commit()
+            return dict(new_user)
         except psycopg2.errors.UniqueViolation:
             conn.rollback()
             with conn.cursor(cursor_factory=DictCursor) as cur:
@@ -129,6 +127,7 @@ def get_or_create_user(user_id: str, email: str = None) -> dict:
                     "SELECT id, role FROM users WHERE id = %s", (user_id,))
                 return dict(cur.fetchone())
         except Exception as e:
+            conn.rollback()
             logger.error(f"Failed to get_or_create_user: {e}")
             raise
 

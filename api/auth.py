@@ -54,7 +54,7 @@ async def get_current_user(
 
     # Local Dev Bypass
     if token == "stub-token":
-        if os.getenv("ENVIRONMENT") != "development":
+        if os.getenv("ENABLE_LOCAL_STUB_AUTH", "false").lower() != "true":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Stub authentication is disabled in production.",

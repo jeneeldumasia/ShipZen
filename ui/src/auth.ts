@@ -16,7 +16,7 @@ if (githubClientId && githubClientSecret) {
       checks: ["none"],
     })
   )
-} else if (process.env.NODE_ENV !== "production") {
+} else if (process.env.ENABLE_LOCAL_STUB_AUTH === "true") {
   // Local Dev / Missing Auth0 fallback
   providers.push(
     CredentialsProvider({

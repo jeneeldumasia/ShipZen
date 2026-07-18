@@ -6,4 +6,5 @@
 **Consequences:** 
 - Secrets are never hardcoded or stored in PostgreSQL.
 - Provides a centralized audit trail via AWS.
-**Conflict Resolution Policy:** Secrets passed as plaintext environment variables or embedded in Git will be rejected.
+- All legacy local secret stubs (e.g., `alert-secret.json`) are strictly forbidden from version control and must be managed via ESO.
+**Conflict Resolution Policy:** Secrets passed as plaintext environment variables, embedded in Git, or stored in dummy local JSON files will be rejected.

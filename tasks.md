@@ -38,3 +38,12 @@
 
 - [ ] 22. Align infra/system/kustomization.yaml — verify all new files are listed (ecr-token-rotator-sa, shipzen-auth-secret)
       STATUS: Done — both added in kustomization.yaml during Task 3
+
+## Production Readiness (Completed)
+
+- [x] PR-1. Secured Auth Bypass — Replaced DEV mode environment check with strict `ENABLE_LOCAL_STUB_AUTH=true`
+- [x] PR-2. Removed hardcoded DB Admins — Replaced with `ADMIN_EMAILS` environment variable
+- [x] PR-3. Fixed DB transaction boundaries for user creation TOCTOU race condition
+- [x] PR-4. Network Proxy Hardening — Appended `--proxy-headers` to Uvicorn and parsed `X-Forwarded-For`
+- [x] PR-5. Secret Management Cleanup — Deleted `alert-secret.json` and added `*-secret.json` to `.gitignore`
+- [x] PR-6. CORS Hardening — Blocked `localhost:3000` access unless `ENVIRONMENT=development`

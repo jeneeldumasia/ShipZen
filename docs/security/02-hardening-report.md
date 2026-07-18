@@ -23,3 +23,9 @@ This report summarizes the definitive security controls configured and enforced 
 ## 4. Build Security
 - **Rootless Kaniko:** Dockerfile fallback mechanism utilizes the `executor` binary to achieve container builds without disabling the OCI process sandbox or requiring Docker-in-Docker (DinD).
 - **S3 Log Streaming:** Logs are piped natively to S3, averting local disk saturation attacks (Denial of Service).
+
+## 5. API & Application Hardening
+- **Authentication Strictness:** Stub authentication is strictly gated behind `ENABLE_LOCAL_STUB_AUTH=true`, effectively neutering accidental exposure.
+- **Rate Limit Proxy Awareness:** `X-Forwarded-For` propagation is strictly enforced to prevent external rate-limit evasion and prevent global blocks caused by Envoy IP overlap.
+- **CORS Hardening:** `localhost:3000` cross-origin requests are blocked universally unless `ENVIRONMENT=development`.
+- **Database Consistency:** Explicit transaction boundaries (`conn.commit()`) wrap critical paths (like User provisioning) to prevent Time-of-Check to Time-of-Use (TOCTOU) race conditions.

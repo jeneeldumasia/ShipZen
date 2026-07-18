@@ -103,6 +103,9 @@ def _user_id_or_ip(request: Request) -> str:
             return hashlib.sha256(token.encode()).hexdigest()[:32]
         except Exception:
             pass
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
     return get_remote_address(request)
 
 
@@ -112,11 +115,13 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS — allow the Next.js dev server and any deployed UI origin.
 # In production, replace "*" with the actual UI domain.
-_UI_ORIGINS = list(filter(None, [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    os.getenv("UI_ORIGIN"),
-]))
+_UI_ORIGINS = [os.getenv("UI_ORIGIN")] if os.getenv("UI_ORIGIN") else []
+if os.getenv("ENVIRONMENT") == "development":
+    _UI_ORIGINS.extend([
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ])
+_UI_ORIGINS = list(filter(None, _UI_ORIGINS))
 
 app.add_middleware(
     CORSMiddleware,
