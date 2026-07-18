@@ -97,9 +97,13 @@ S3_LOG_BUCKET = os.environ.get("S3_LOG_BUCKET", "")
 
 # Limit concurrent monitoring threads to prevent unbounded thread exhaustion
 import threading
-MAX_WORKERS = 200
+# MED-07 Fix: Reduce MAX_WORKERS from 200 to 20 to match DB pool size and prevent OOM
+MAX_WORKERS = 20
 _executor = ThreadPoolExecutor(max_workers=MAX_WORKERS)
 _semaphore = threading.Semaphore(MAX_WORKERS)
+
+# PERF-04 Fix: Shared module-level Redis client
+_redis_client = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, password=config.REDIS_PASSWORD)
 
 from worker.database import get_db_connection
 
@@ -124,7 +128,7 @@ def record_build(deployment_id: str, s3_key: str, status: str):
 def monitor_job(job_name: str, deployment_id: str, image_name: str, state_machine: StateMachine, builder_type: str = "unknown", project_id: str = "unknown", queue: QueueClient = None, message_id: str = None):
     """Monitors the Kubernetes Job, streams logs to Redis, and finalizes the deployment."""
     logger.info(f"Monitoring Job {job_name} for deployment {deployment_id}")
-    r = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT)
+    r = _redis_client
     s3_log_key = f"logs/{deployment_id}/build.log"
     build_start_time = time.time()
 
@@ -299,6 +303,13 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
     if not deployment_id or not repo_url or not image_name:
         queue.add_to_dlq(message_id, data)
         return
+        
+    # CRIT-01 Fix: Additional branch name validation at worker level
+    import re
+    if not re.match(r'^[a-zA-Z0-9_.\-/]{1,200}$', branch):
+        logger.error(f"Invalid branch name received: {branch}")
+        queue.add_to_dlq(message_id, data)
+        return
 
     deployment = state_machine.get_deployment(deployment_id)
     if deployment and deployment.get("state") in [DeploymentState.BUILDING, DeploymentState.DEPLOYING, DeploymentState.RUNNING]:
@@ -311,7 +322,7 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
             f"Deployment {deployment_id} is a rollback, skipping build.")
         state_machine.update_state(deployment_id, "Deploying")
         queue.ack_message(message_id)
-        _semaphore.release()
+        # HIGH-03 Fix: Removed _semaphore.release() from here because the finally block handles it
         return
 
     logger.info(f"Processing deployment {deployment_id}")
@@ -331,9 +342,10 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
 
     # Fix 8: Workspace directory leaks on clone failure, moved creation inside try and cleanup to finally
     workspace = f"/tmp/workspace_{deployment_id}"
+    # HIGH-11 Fix: Initialize before try block to prevent UnboundLocalError in finally
+    github_secret_name = None
     try:
         clone_url = repo_url
-        github_secret_name = None
         if repo_url.startswith("https://github.com/"):
             token = get_github_app_token(repo_url)
             if token:
@@ -480,9 +492,13 @@ def process_message(queue: QueueClient, state_machine: StateMachine, message_id:
 
 
 def main():
+    # HIGH-10 Fix: Graceful shutdown flag
+    _shutdown = False
+
     def handle_sigterm(signum, frame):
-        logger.info("Received SIGTERM, shutting down worker forcefully to avoid atexit hang...")
-        os._exit(0)
+        nonlocal _shutdown
+        logger.info("Received SIGTERM, initiating graceful shutdown...")
+        _shutdown = True
 
     signal.signal(signal.SIGTERM, handle_sigterm)
     signal.signal(signal.SIGINT, handle_sigterm)
@@ -494,7 +510,10 @@ def main():
     logger.info(
         f"Worker {config.CONSUMER_NAME} started. Listening on stream {config.STREAM_NAME}")
 
-    while True:
+    # REL-02 Fix: Track backoff state
+    error_backoff = 2
+
+    while not _shutdown:
         try:
             claimed = queue.recover_pending_messages()
             if claimed:
@@ -509,9 +528,17 @@ def main():
                     for msg_id, data in msg_list:
                         _semaphore.acquire()
                         _executor.submit(process_message, queue, state_machine, msg_id, data)
+            
+            # Reset backoff on success
+            error_backoff = 2
         except Exception:
             logger.exception("Queue read error")
-            time.sleep(2)
+            time.sleep(error_backoff)
+            error_backoff = min(60, error_backoff * 2)  # Exponential backoff up to 60s
+            
+    logger.info("Worker main loop exited. Waiting for running threads to finish...")
+    _executor.shutdown(wait=True, cancel_futures=False)
+    logger.info("Shutdown complete.")
 
 
 if __name__ == "__main__":

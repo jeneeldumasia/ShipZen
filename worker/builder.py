@@ -59,12 +59,17 @@ class DockerfileBuilder(Builder):
         token_resp, ecr_token = get_ecr_credentials()
         registry = image_uri.split('/')[0] if '/' in image_uri else ''
 
-        git_clone_env = []
+        # CRIT-01 Fix: Use environment variables instead of f-string interpolation
+        # to prevent shell injection via malicious branch names or repo URLs.
+        git_clone_env = [
+            {"name": "GIT_REPO_URL", "value": repo_url},
+            {"name": "GIT_BRANCH", "value": branch},
+        ]
         if overrides.get("github_secret_name"):
-            git_clone_env = [{"name": "GITHUB_TOKEN", "valueFrom": {"secretKeyRef": {"name": overrides["github_secret_name"], "key": "GITHUB_TOKEN"}}}]
-            clone_cmd = f"URL=$(echo '{repo_url}' | sed \"s|https://github.com/|https://x-access-token:${{GITHUB_TOKEN}}@github.com/|\") && git clone --depth=1 --branch {branch} $URL /workspace"
+            git_clone_env.append({"name": "GITHUB_TOKEN", "valueFrom": {"secretKeyRef": {"name": overrides["github_secret_name"], "key": "GITHUB_TOKEN"}}})
+            clone_cmd = 'URL=$(echo "$GIT_REPO_URL" | sed "s|https://github.com/|https://x-access-token:${GITHUB_TOKEN}@github.com/|") && git clone --depth=1 --branch "$GIT_BRANCH" "$URL" /workspace'
         else:
-            clone_cmd = f"git clone --depth=1 --branch {branch} {repo_url} /workspace"
+            clone_cmd = 'git clone --depth=1 --branch "$GIT_BRANCH" "$GIT_REPO_URL" /workspace'
 
         build_script = (
             "set -e; "
@@ -182,12 +187,16 @@ class BuildpackBuilder(Builder):
         token_resp, ecr_token = get_ecr_credentials()
         registry = image_uri.split('/')[0] if '/' in image_uri else ''
 
-        git_clone_env = []
+        # CRIT-01 Fix: Use environment variables instead of f-string interpolation
+        git_clone_env = [
+            {"name": "GIT_REPO_URL", "value": repo_url},
+            {"name": "GIT_BRANCH", "value": branch},
+        ]
         if overrides.get("github_secret_name"):
-            git_clone_env = [{"name": "GITHUB_TOKEN", "valueFrom": {"secretKeyRef": {"name": overrides["github_secret_name"], "key": "GITHUB_TOKEN"}}}]
-            clone_cmd = f"URL=$(echo '{repo_url}' | sed \"s|https://github.com/|https://x-access-token:${{GITHUB_TOKEN}}@github.com/|\") && git clone --depth=1 --branch {branch} $URL /workspace"
+            git_clone_env.append({"name": "GITHUB_TOKEN", "valueFrom": {"secretKeyRef": {"name": overrides["github_secret_name"], "key": "GITHUB_TOKEN"}}})
+            clone_cmd = 'URL=$(echo "$GIT_REPO_URL" | sed "s|https://github.com/|https://x-access-token:${GITHUB_TOKEN}@github.com/|") && git clone --depth=1 --branch "$GIT_BRANCH" "$URL" /workspace'
         else:
-            clone_cmd = f"git clone --depth=1 --branch {branch} {repo_url} /workspace"
+            clone_cmd = 'git clone --depth=1 --branch "$GIT_BRANCH" "$GIT_REPO_URL" /workspace'
 
         setup_script = f"""
 {clone_cmd}

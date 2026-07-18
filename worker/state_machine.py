@@ -28,7 +28,7 @@ class StateMachine:
     def _get_redis(self):
         if self._redis is None:
             self._redis = redis.Redis(
-                host=config.REDIS_HOST, port=config.REDIS_PORT)
+                host=config.REDIS_HOST, port=config.REDIS_PORT, password=config.REDIS_PASSWORD)
         return self._redis
 
     def update_state(self, deployment_id: str, new_state: str, error_msg: str = None):

@@ -31,7 +31,7 @@ resource "helm_release" "kyverno_policies" {
 
   values = [
     yamlencode({
-      validationFailureAction = "Audit"
+      validationFailureAction = "Enforce"
     })
   ]
 

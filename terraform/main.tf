@@ -294,6 +294,20 @@ resource "aws_s3_bucket" "build_logs" {
   force_destroy = true # Required for terraform destroy to succeed on non-empty bucket
 }
 
+# MED-10 Fix: Add S3 lifecycle rule to expire build logs after 90 days
+resource "aws_s3_bucket_lifecycle_configuration" "build_logs" {
+  bucket = aws_s3_bucket.build_logs.id
+
+  rule {
+    id     = "expire_old_logs"
+    status = "Enabled"
+
+    expiration {
+      days = 90
+    }
+  }
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "build_logs" {
   bucket = aws_s3_bucket.build_logs.id
 

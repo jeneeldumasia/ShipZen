@@ -27,7 +27,11 @@ resource "helm_release" "redis" {
   # Traffic is restricted to shipzen-system namespace via NetworkPolicy.
   set {
     name  = "auth.enabled"
-    value = "false"
+    value = "true"
+  }
+  set {
+    name  = "auth.password"
+    value = var.redis_password
   }
 
   # Ensure the master service is named "redis-master" so the DNS entry

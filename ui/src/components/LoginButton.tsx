@@ -3,19 +3,19 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 
-export function LoginButton({ hasGithub, isDev }: { hasGithub: boolean; isDev: boolean }) {
+export function LoginButton({ hasGithub, isStubAuthEnabled }: { hasGithub: boolean; isStubAuthEnabled: boolean }) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignIn = async () => {
     setIsLoading(true);
     if (hasGithub) {
       await signIn("github", { callbackUrl: "/dashboard" });
-    } else if (isDev) {
+    } else if (isStubAuthEnabled) {
       await signIn("credentials", { username: "admin", callbackUrl: "/dashboard" });
     }
   };
 
-  const isConfigError = !hasGithub && !isDev;
+  const isConfigError = !hasGithub && !isStubAuthEnabled;
 
   return (
     <button

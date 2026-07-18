@@ -49,9 +49,10 @@ ECR_REGISTRY = os.getenv("ECR_REGISTRY", "")
 
 REDIS_HOST = os.getenv("REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 # Module-level Redis singleton — created once, reused across all reconcile ticks.
-_redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+_redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
 
 jinja_env = Environment(loader=FileSystemLoader("templates"))
 
@@ -73,13 +74,15 @@ def ensure_ecr_repository(project_id: str):
     except Exception as e:
         logger.error(f"Failed to ensure ECR repository exists: {e}")
 
+# PERF-03 Fix: Module-level ECR client singleton
+_ecr_client = boto3.client('ecr', region_name=os.getenv("AWS_REGION", "us-east-1"))
+
 def delete_ecr_repository(project_id: str):
     try:
-        ecr = boto3.client('ecr', region_name=os.getenv("AWS_REGION", "us-east-1"))
         repo_name = f"shipzen-builds/{project_id}"
         logger.info(f"Deleting ECR repository {repo_name}")
-        ecr.delete_repository(repositoryName=repo_name, force=True)
-    except ecr.exceptions.RepositoryNotFoundException:
+        _ecr_client.delete_repository(repositoryName=repo_name, force=True)
+    except _ecr_client.exceptions.RepositoryNotFoundException:
         pass
     except Exception as e:
         logger.error(f"Failed to delete ECR repository: {e}")
@@ -241,7 +244,8 @@ def reconcile():
             """)
             conn.commit()
 
-            cur.execute("SELECT * FROM projects;")
+            # HIGH-08 Fix: Filter out terminated projects to prevent loop slowdown
+            cur.execute("SELECT * FROM projects WHERE status != 'Terminated';")
             projects = [dict(row) for row in cur.fetchall()]
     finally:
         close_db_connection(conn)
@@ -300,10 +304,29 @@ def reconcile():
         logger.error(f"Failed to fetch global K8s state: {e}")
         return
 
+    # REL-03 Fix: Track consecutive failures per project
+    global _project_failures
+    if '_project_failures' not in globals():
+        _project_failures = {}
+
     import concurrent.futures
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        futures = [executor.submit(_reconcile_project, dict(row), global_deps, global_svcs, global_routes, global_ext_secrets) for row in projects]
-        concurrent.futures.wait(futures)
+        futures = {}
+        for row in projects:
+            p_id = row['id']
+            if _project_failures.get(p_id, 0) >= 3:
+                logger.warning(f"Skipping project {p_id} due to { _project_failures[p_id]} consecutive failures")
+                continue
+            futures[executor.submit(_reconcile_project, dict(row), global_deps, global_svcs, global_routes, global_ext_secrets)] = p_id
+            
+        for future in concurrent.futures.as_completed(futures):
+            p_id = futures[future]
+            try:
+                future.result()
+                _project_failures[p_id] = 0
+            except Exception as e:
+                _project_failures[p_id] = _project_failures.get(p_id, 0) + 1
+                logger.error(f"Project {p_id} failed reconciliation: {e}")
 
 
 def _reconcile_project(project_data: dict, global_deps: dict, global_svcs: dict, global_routes: dict, global_ext_secrets: dict):
@@ -350,8 +373,10 @@ def _reconcile_project(project_data: dict, global_deps: dict, global_svcs: dict,
                     project_conn.commit()
                 else:
                     delete_ecr_repository(project.id)
+                    # HIGH-08 Fix: Update status to Terminated instead of hard-deleting the row
+                    # to preserve audit log foreign keys and history
                     project_cur.execute(
-                        "DELETE FROM projects WHERE id = %s;", (project.id,))
+                        "UPDATE projects SET status = 'Terminated' WHERE id = %s;", (project.id,))
                     project_conn.commit()
                     logger.info(
                         f"Project {project.name} permanently cleaned up.")
@@ -371,7 +396,8 @@ def _reconcile_project(project_data: dict, global_deps: dict, global_svcs: dict,
                         project_conn, project_cur, project, global_deps, global_svcs, global_routes, global_ext_secrets)
 
     except Exception as e:
-        logger.error(f"Error reconciling project {row['id']}: {e}")
+        # HIGH-02 Fix: Use project_data['_id'] since 'id' was popped
+        logger.error(f"Error reconciling project {project_data['_id']}: {e}")
         try:
             # Fix 3: Re-use project_conn to set FAILED state and avoid Connection Pool Exhaustion Deadlock
             with project_conn.cursor() as err_cur:
@@ -414,6 +440,12 @@ def reconcile_deployments(conn, cur, project, global_deps, global_svcs, global_r
                     if k8s_replicas != db_replicas or k8s_image != db_dep.get('image_uri'):
                         drifted = True
                 
+                # Handle deployments without a Kubernetes Deployment
+                if not k8s_dep:
+                    if db_dep['state'] in ("Building", "Queued", "Verifying", "Failed"):
+                        continue
+                    # HIGH-23 Fix: If state is Deploying or Running but no K8s Deployment exists, drift reconciliation below will create it.
+
                 missing_resources = (
                     not k8s_dep or
                     f"{d_id}-svc" not in k8s_svc_names or

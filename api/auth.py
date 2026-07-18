@@ -22,8 +22,14 @@ GITHUB_ENABLED = (
 
 _bearer = HTTPBearer(auto_error=False)
 
-# Cache resolved User objects for 5 minutes to avoid rate limits and DB hits
-_token_cache = TTLCache(maxsize=1000, ttl=300)
+# HIGH-01 Fix: Reduce token cache TTL from 5 minutes to 60 seconds
+# to minimize the window where revoked access remains valid
+_token_cache = TTLCache(maxsize=1000, ttl=60)
+
+# REL-01 Fix: Circuit breaker state for GitHub API
+_github_cb_failures = 0
+_github_cb_last_failure = 0.0
+_github_cb_open = False
 
 
 @dataclass
@@ -53,12 +59,14 @@ async def get_current_user(
     token = credentials.credentials
 
     # Local Dev Bypass
+    # MED-09 Fix: Explicitly deny local stub auth if ENVIRONMENT == "production"
     if token == "stub-token":
-        if os.getenv("ENABLE_LOCAL_STUB_AUTH", "false").lower() != "true":
+        if os.getenv("ENABLE_LOCAL_STUB_AUTH", "false").lower() != "true" or os.getenv("ENVIRONMENT", "development") == "production":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Stub authentication is disabled in production.",
+                detail="Stub authentication is disabled.",
             )
+
         from database import get_or_create_user
         import asyncio
         db_user = await asyncio.to_thread(get_or_create_user, "local-dev-user", "local-dev@example.com")
@@ -81,6 +89,19 @@ async def get_current_user(
         return _token_cache[cache_key]
 
     # Verify token with GitHub
+    
+    # REL-01 Fix: Circuit breaker logic for GitHub API
+    global _github_cb_failures, _github_cb_last_failure, _github_cb_open
+    import time
+    
+    if _github_cb_open:
+        if time.time() - _github_cb_last_failure < 30:
+            raise HTTPException(
+                status_code=503, detail="Auth service temporarily unavailable (circuit breaker open)")
+        else:
+            # Half-open state: let one request through to test
+            _github_cb_open = False
+
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
@@ -117,8 +138,19 @@ async def get_current_user(
             }
     except httpx.RequestError as e:
         logger.error(f"GitHub API request failed: {e}")
+        # Update circuit breaker state
+        _github_cb_failures += 1
+        _github_cb_last_failure = time.time()
+        if _github_cb_failures >= 5:
+            _github_cb_open = True
+            logger.warning("GitHub API circuit breaker opened")
+            
         raise HTTPException(
             status_code=503, detail="Auth service unavailable")
+            
+    # Reset circuit breaker on success
+    _github_cb_failures = 0
+    _github_cb_open = False
 
     from database import get_or_create_user
     db_user = await asyncio.to_thread(get_or_create_user, user_info["id"], user_info["email"])

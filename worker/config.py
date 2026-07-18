@@ -5,6 +5,7 @@ class Config:
     REDIS_HOST = os.getenv(
         "REDIS_HOST", "redis-master.shipzen-system.svc.cluster.local")
     REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+    REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
     # Fix #20: raise on missing DATABASE_URL rather than silently falling back
     # to hardcoded postgres:postgres, which will never connect in-cluster.

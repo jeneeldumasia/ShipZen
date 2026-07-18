@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export default function LandingPage() {
   const hasGithub = !!(process.env.GITHUB_CLIENT_ID || process.env.SHIPZEN_GITHUB_CLIENT_ID);
 
-  const isDev = process.env.NODE_ENV !== "production";
+  const isStubAuthEnabled = process.env.ENABLE_LOCAL_STUB_AUTH === "true";
 
   return (
     <div className="flex flex-col min-h-screen bg-canvas-bg overflow-hidden relative selection:bg-brand/20 selection:text-text-primary">
@@ -50,7 +50,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <LoginButton hasGithub={hasGithub} isDev={isDev} />
+          <LoginButton hasGithub={hasGithub} isStubAuthEnabled={isStubAuthEnabled} />
         </div>
       </main>
 

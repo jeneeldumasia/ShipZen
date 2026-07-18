@@ -9,13 +9,17 @@ class PooledConnectionWrapper:
     def __init__(self, conn, pool):
         self._conn = conn
         self._pool = pool
-        self._conn.autocommit = True
+        self._conn.autocommit = False
         
     def __enter__(self):
         return self._conn
         
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self._conn:
+            if exc_type is None:
+                self._conn.commit()
+            else:
+                self._conn.rollback()
             self._pool.putconn(self._conn)
             self._conn = None
 

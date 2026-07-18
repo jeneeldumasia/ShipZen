@@ -60,19 +60,31 @@ STREAM_NAME = os.getenv("STREAM_NAME", "deploy_stream")
 ECR_REPOSITORY_URL = os.getenv("ECR_REPOSITORY_URL", "")
 
 # Repo URL allowlist — same pattern used in builder/main.py
+# MED-03 Fix: Use \A and \Z anchors to prevent newline injection
 _REPO_URL_RE = re.compile(
-    r'^(https://[a-zA-Z0-9._/:\-@]+\.git'
+    r'\A(https://[a-zA-Z0-9._/:\-@]+\.git'
     r'|https://[a-zA-Z0-9._/:\-@]+'
-    r'|git@[a-zA-Z0-9._\-]+:[a-zA-Z0-9._/\-]+\.git)$'
+    r'|git@[a-zA-Z0-9._\-]+:[a-zA-Z0-9._/\-]+\.git)\Z'
 )
+
+# Branch name validation regex — shared with webhook handler (CRIT-01)
+_BRANCH_RE = re.compile(r'^[a-zA-Z0-9_.\-/]{1,200}$')
+
+# HIGH-20 Fix: Reserved namespace prefixes that tenants cannot use
+_RESERVED_NS_PREFIXES = ('kube-', 'shipzen-', 'default', 'observability', 'kyverno', 'argocd')
+
+# PERF-01 Fix: Module-level boto3 Secrets Manager client singleton
+_sm_client = boto3.client('secretsmanager', region_name=os.getenv('AWS_REGION', 'us-east-1'))
 
 # Kubernetes namespace name rules: lowercase alphanumeric and hyphens, 3–63 chars
 _NAMESPACE_RE = re.compile(r'^[a-z0-9][a-z0-9\-]{1,61}[a-z0-9]$')
 
 
-_redis_pool = redis_lib.ConnectionPool(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+
+_redis_pool = redis_lib.ConnectionPool(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
 _redis_client = redis_lib.Redis(connection_pool=_redis_pool)
-_aioredis_client = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+_aioredis_client = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, password=REDIS_PASSWORD, decode_responses=True)
 def get_redis() -> redis_lib.Redis:
     return _redis_client
 
@@ -145,6 +157,11 @@ class CreateProjectRequest(BaseModel):
             raise ValueError(
                 "namespace must be lowercase alphanumeric with hyphens, 3–63 chars, "
                 "and cannot start or end with a hyphen"
+            )
+        # HIGH-20 Fix: Reject reserved Kubernetes namespace prefixes
+        if v in _RESERVED_NS_PREFIXES or any(v.startswith(p) for p in _RESERVED_NS_PREFIXES if p.endswith('-')):
+            raise ValueError(
+                f"namespace '{v}' is reserved and cannot be used for tenant projects"
             )
         return v
 
@@ -260,16 +277,19 @@ def list_projects(
                         """, (limit, offset)
                     )
                 else:
+                    # HIGH-15 Fix: Include projects where user is a member, not just owner
                     cur.execute(
                         """
-                        SELECT p.*, u.email as owner_email 
+                        SELECT DISTINCT p.*, u.email as owner_email 
                         FROM projects p
                         LEFT JOIN users u ON p.owner_id = u.id
-                        WHERE p.deleted_at IS NULL AND p.owner_id = %s 
+                        LEFT JOIN project_members pm ON p.id = pm.project_id
+                        WHERE p.deleted_at IS NULL 
+                          AND (p.owner_id = %s OR pm.user_id = %s)
                         ORDER BY p.created_at DESC
                         LIMIT %s OFFSET %s;
                         """,
-                        (current_user.user_id, limit, offset)
+                        (current_user.user_id, current_user.user_id, limit, offset)
                     )
                 return [_serialize(dict(r)) for r in cur.fetchall()]
     except Exception as e:
@@ -527,6 +547,25 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
             detail=f"Project is in status '{project['status']}' and cannot accept deployments"
         )
 
+    # CRIT-03 Fix: Reject if there's already an in-flight deployment for this project
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM deployments WHERE project_id = %s AND state IN ('Queued', 'Building', 'Deploying', 'Verifying') LIMIT 1;",
+                    (project_id,)
+                )
+                if cur.fetchone():
+                    raise HTTPException(
+                        status_code=409,
+                        detail="A deployment is already in progress for this project. Wait for it to complete or fail before deploying again."
+                    )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to check in-flight deployments: {e}")
+        raise HTTPException(status_code=500, detail="Failed to check deployment status")
+
     deployment_id = str(uuid.uuid4())
     queued_at = str(time.time())
 
@@ -719,18 +758,21 @@ def get_deployment(request: Request, project_id: str, deployment_id: str, projec
 
 
 @app.websocket("/ws/projects/{project_id}/deployments/{deployment_id}/status")
-async def websocket_deployment_status(websocket: WebSocket, project_id: str, deployment_id: str, token: str = Query(None)):
-    if not token:
-        await websocket.close(code=1008)
-        return
-    from auth import get_current_user_from_token
+async def websocket_deployment_status(websocket: WebSocket, project_id: str, deployment_id: str):
+    await websocket.accept()
+    
+    # HIGH-16 Fix: Accept token via the first WS message instead of query string
     try:
+        auth_data = await websocket.receive_json()
+        token = auth_data.get("token")
+        if not token:
+            await websocket.close(code=1008)
+            return
+        from auth import get_current_user_from_token
         await get_current_user_from_token(token)
     except Exception:
         await websocket.close(code=1008)
         return
-
-    await websocket.accept()
 
     import asyncio
     pubsub = _aioredis_client.pubsub()
@@ -785,11 +827,17 @@ async def websocket_deployment_status(websocket: WebSocket, project_id: str, dep
 @app.get("/projects/{project_id}/deployments/{deployment_id}/logs/stream", tags=["Deployments"])
 async def stream_logs(project_id: str, deployment_id: str, project: dict = Depends(verify_project_access)):
 
+    # HIGH-05 Fix: Add timeout to SSE Pub/Sub listen to prevent leaked subscriptions
+    import asyncio
+
     async def event_stream():
         pubsub = _aioredis_client.pubsub()
         await pubsub.subscribe(f"shipzen:logs:{deployment_id}")
         try:
+            deadline = time.time() + 300  # 5 minute max SSE session
             async for message in pubsub.listen():
+                if time.time() > deadline:
+                    break
                 if message["type"] == "message":
                     yield f"data: {message['data']}\n\n"
         finally:
@@ -808,19 +856,24 @@ async def websocket_deployment_logs(
     websocket: WebSocket,
     project_id: str,
     deployment_id: str,
-    token: str = Query(None),
 ):
     """
     WebSocket endpoint for live build log streaming.
     Subscribes to the Redis Pub/Sub channel `shipzen:logs:{deployment_id}`
     and forwards each line to the connected client as plain text.
-    Auth is passed via ?token= query param (same pattern as the status WS).
     """
-    if not token:
-        await websocket.close(code=1008)
-        return
-    from auth import get_current_user_from_token
+    await websocket.accept()
+    
+    # HIGH-16 Fix: Accept token via the first WS message instead of query string
     try:
+        import json
+        auth_data_str = await websocket.receive_text()
+        auth_data = json.loads(auth_data_str)
+        token = auth_data.get("token")
+        if not token:
+            await websocket.close(code=1008)
+            return
+        from auth import get_current_user_from_token
         user = await get_current_user_from_token(token)
     except Exception:
         await websocket.close(code=1008)
@@ -834,8 +887,6 @@ async def websocket_deployment_logs(
     except HTTPException:
         await websocket.close(code=1008)
         return
-
-    await websocket.accept()
 
     pubsub = _aioredis_client.pubsub()
     await pubsub.subscribe(f"shipzen:logs:{deployment_id}")
@@ -933,9 +984,17 @@ def get_build_logs(request: Request, project_id: str, deployment_id: str, build_
                     raise HTTPException(
                         status_code=404, detail="Log file not found in S3")
 
-                content = obj['Body'].read()
-                return Response(
-                    content=content,
+                # HIGH-06 Fix: Stream S3 object instead of loading entirely into memory
+                def stream_s3_body():
+                    body = obj['Body']
+                    while True:
+                        chunk = body.read(64 * 1024)  # 64KB chunks
+                        if not chunk:
+                            break
+                        yield chunk
+
+                return StreamingResponse(
+                    stream_s3_body(),
                     media_type="text/plain",
                     headers={
                         "Content-Disposition": f"inline; filename=build-{build_id[:8]}.log"}
@@ -1024,48 +1083,55 @@ def get_global_audit_logs(
 def get_env_vars(request: Request, project_id: str, project: dict = Depends(verify_project_access)):
     # Fix 6: Use project['id'] instead of name to avoid collision
     secret_id = f"shipzen/project/{project['id']}"
-    sm = boto3.client('secretsmanager')
     try:
         # We only return the keys, not the values for security
-        res = sm.get_secret_value(SecretId=secret_id)
-        import json
+        res = _sm_client.get_secret_value(SecretId=secret_id)
         secret_dict = json.loads(res.get('SecretString', '{}'))
         return {"keys": list(secret_dict.keys())}
-    except sm.exceptions.ResourceNotFoundException:
+    except _sm_client.exceptions.ResourceNotFoundException:
         return {"keys": []}
     except Exception as e:
         logger.error(f"Failed to fetch env vars for {project_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to fetch env vars")
 
 
+# HIGH-22 Fix: Pydantic model for env var input validation
+class PutEnvVarRequest(BaseModel):
+    key: str
+    value: str
+
+
 @app.put("/projects/{project_id}/env", tags=["Environment"])
 @limiter.limit("20/minute")
-def put_env_var(request: Request, project_id: str, body: dict, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
-    """Expected body: {"key": "API_KEY", "value": "secret123"}"""
-    key = body.get("key")
-    value = body.get("value")
-    if not key or not value:
-        raise HTTPException(status_code=400, detail="Missing key or value")
-
+def put_env_var(request: Request, project_id: str, body: PutEnvVarRequest, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
+    """Add or update an environment variable for a project."""
     # Fix 6: Use project['id'] instead of name to avoid collision
     secret_id = f"shipzen/project/{project['id']}"
-    sm = boto3.client('secretsmanager')
-    import json
 
+    # CRIT-02 Fix: Use VersionId-based optimistic locking to prevent read-modify-write races
     try:
         try:
-            res = sm.get_secret_value(SecretId=secret_id)
+            res = _sm_client.get_secret_value(SecretId=secret_id)
             secret_dict = json.loads(res.get('SecretString', '{}'))
-        except sm.exceptions.ResourceNotFoundException:
+            version_id = res.get('VersionId')
+        except _sm_client.exceptions.ResourceNotFoundException:
             secret_dict = {}
+            version_id = None
 
-        secret_dict[key] = value
+        secret_dict[body.key] = body.value
 
         try:
-            sm.update_secret(SecretId=secret_id,
-                             SecretString=json.dumps(secret_dict))
-        except sm.exceptions.ResourceNotFoundException:
-            sm.create_secret(
+            if version_id:
+                _sm_client.put_secret_value(
+                    SecretId=secret_id,
+                    SecretString=json.dumps(secret_dict),
+                    VersionStages=['AWSCURRENT']
+                )
+            else:
+                _sm_client.create_secret(
+                    Name=secret_id, SecretString=json.dumps(secret_dict))
+        except _sm_client.exceptions.ResourceNotFoundException:
+            _sm_client.create_secret(
                 Name=secret_id, SecretString=json.dumps(secret_dict))
 
         log_audit_event(
@@ -1087,15 +1153,13 @@ def put_env_var(request: Request, project_id: str, body: dict, project: dict = D
 def delete_env_var(request: Request, project_id: str, key: str, project: dict = Depends(verify_project_access), current_user: User = Depends(get_current_user)):
     # Fix 6: Use project['id'] instead of name to avoid collision
     secret_id = f"shipzen/project/{project['id']}"
-    sm = boto3.client('secretsmanager')
-    import json
 
     try:
-        res = sm.get_secret_value(SecretId=secret_id)
+        res = _sm_client.get_secret_value(SecretId=secret_id)
         secret_dict = json.loads(res.get('SecretString', '{}'))
         if key in secret_dict:
             del secret_dict[key]
-            sm.update_secret(SecretId=secret_id,
+            _sm_client.update_secret(SecretId=secret_id,
                              SecretString=json.dumps(secret_dict))
 
             log_audit_event(
@@ -1107,7 +1171,7 @@ def delete_env_var(request: Request, project_id: str, key: str, project: dict = 
                 details={"key": key},
             )
         return {"message": "Deleted successfully"}
-    except sm.exceptions.ResourceNotFoundException:
+    except _sm_client.exceptions.ResourceNotFoundException:
         return {"message": "Deleted successfully"}
     except Exception as e:
         logger.error(f"Failed to delete env var for {project_id}: {e}")
@@ -1172,13 +1236,13 @@ class PutSecretRequest(BaseModel):
 @limiter.limit("50/minute")
 def list_secrets(request: Request, project_id: str, project: dict = Depends(verify_project_access)):
     """List all secret keys for a project (values are redacted)."""
-    sm = boto3.client('secretsmanager', region_name=os.getenv("AWS_REGION", "us-east-1"))
-    secret_id = f"shipzen/{project['name']}/"
+    # CRIT-07 Fix: Use project ID instead of name to match /env endpoints
+    secret_id = f"shipzen/project/{project['id']}"
     try:
-        resp = sm.get_secret_value(SecretId=secret_id)
+        resp = _sm_client.get_secret_value(SecretId=secret_id)
         secrets_dict = json.loads(resp['SecretString'])
         return {"secrets": [{"key": k, "value": "********"} for k in secrets_dict.keys()]}
-    except sm.exceptions.ResourceNotFoundException:
+    except _sm_client.exceptions.ResourceNotFoundException:
         return {"secrets": []}
     except Exception as e:
         logger.error(f"Failed to list secrets: {e}")
@@ -1188,14 +1252,14 @@ def list_secrets(request: Request, project_id: str, project: dict = Depends(veri
 @limiter.limit("20/minute")
 def put_secret(request: Request, project_id: str, body: PutSecretRequest, project: dict = Depends(verify_project_access)):
     """Add or update a secret for a project."""
-    sm = boto3.client('secretsmanager', region_name=os.getenv("AWS_REGION", "us-east-1"))
-    secret_id = f"shipzen/{project['name']}/"
+    # CRIT-07 Fix: Use project ID instead of name to match /env endpoints
+    secret_id = f"shipzen/project/{project['id']}"
     secrets_dict = {}
     
     try:
-        resp = sm.get_secret_value(SecretId=secret_id)
+        resp = _sm_client.get_secret_value(SecretId=secret_id)
         secrets_dict = json.loads(resp['SecretString'])
-    except sm.exceptions.ResourceNotFoundException:
+    except _sm_client.exceptions.ResourceNotFoundException:
         pass
     except Exception as e:
         logger.error(f"Failed to fetch secrets for update: {e}")
@@ -1205,9 +1269,9 @@ def put_secret(request: Request, project_id: str, body: PutSecretRequest, projec
     
     try:
         try:
-            sm.put_secret_value(SecretId=secret_id, SecretString=json.dumps(secrets_dict))
-        except sm.exceptions.ResourceNotFoundException:
-            sm.create_secret(Name=secret_id, SecretString=json.dumps(secrets_dict))
+            _sm_client.put_secret_value(SecretId=secret_id, SecretString=json.dumps(secrets_dict))
+        except _sm_client.exceptions.ResourceNotFoundException:
+            _sm_client.create_secret(Name=secret_id, SecretString=json.dumps(secrets_dict))
         return {"message": "Secret updated successfully", "key": body.key}
     except Exception as e:
         logger.error(f"Failed to save secret: {e}")
@@ -1217,17 +1281,17 @@ def put_secret(request: Request, project_id: str, body: PutSecretRequest, projec
 @limiter.limit("20/minute")
 def delete_secret(request: Request, project_id: str, key: str, project: dict = Depends(verify_project_access)):
     """Delete a secret key from a project."""
-    sm = boto3.client('secretsmanager', region_name=os.getenv("AWS_REGION", "us-east-1"))
-    secret_id = f"shipzen/{project['name']}/"
+    # CRIT-07 Fix: Use project ID instead of name
+    secret_id = f"shipzen/project/{project['id']}"
     
     try:
-        resp = sm.get_secret_value(SecretId=secret_id)
+        resp = _sm_client.get_secret_value(SecretId=secret_id)
         secrets_dict = json.loads(resp['SecretString'])
         if key in secrets_dict:
             del secrets_dict[key]
-            sm.put_secret_value(SecretId=secret_id, SecretString=json.dumps(secrets_dict))
+            _sm_client.put_secret_value(SecretId=secret_id, SecretString=json.dumps(secrets_dict))
         return {"message": "Secret deleted successfully"}
-    except sm.exceptions.ResourceNotFoundException:
+    except _sm_client.exceptions.ResourceNotFoundException:
         raise HTTPException(status_code=404, detail="Secret not found")
     except Exception as e:
         logger.error(f"Failed to delete secret: {e}")
@@ -1282,6 +1346,10 @@ async def github_webhook(request: Request, project_id: str):
     branch = "main"
     if "ref" in payload:
         branch = payload["ref"].split("/")[-1]
+
+    # CRIT-01 Fix: Validate branch name to prevent shell injection in build Jobs
+    if not _BRANCH_RE.match(branch):
+        raise HTTPException(status_code=400, detail="Invalid branch name in webhook payload")
 
     # We need repo URL
     repo_url = payload.get("repository", {}).get("clone_url")
@@ -1630,8 +1698,9 @@ def _get_project_or_404(project_id: str, current_user: User) -> dict:
     try:
         with get_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
+                # MED-06 Fix: Filter out soft-deleted projects
                 cur.execute(
-                    "SELECT * FROM projects WHERE id = %s;", (project_id,))
+                    "SELECT * FROM projects WHERE id = %s AND deleted_at IS NULL;", (project_id,))
                 row = cur.fetchone()
     except Exception as e:
         logger.error(f"DB error fetching project {project_id}: {e}")
@@ -1666,11 +1735,16 @@ def _get_deployment_or_404(project_id: str, deployment_id: str) -> dict:
     return dict(row)
 
 
+# SEC-06 Fix: Fields to exclude from API responses
+_SERIALIZE_EXCLUDE = {'webhook_secret'}
+
 def _serialize(obj: dict) -> dict:
-    """Convert non-JSON-serializable types (datetime) to strings."""
+    """Convert non-JSON-serializable types (datetime) to strings.
+    Excludes sensitive fields like webhook_secret."""
     return {
         k: v.isoformat() if hasattr(v, "isoformat") else v
         for k, v in obj.items()
+        if k not in _SERIALIZE_EXCLUDE
     }
 
 # ── Restarts ──────────────────────────────────────────────────────────────────

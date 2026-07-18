@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 class QueueClient:
     def __init__(self):
         self.r = redis.Redis(host=config.REDIS_HOST,
-                             port=config.REDIS_PORT, decode_responses=True)
+                             port=config.REDIS_PORT, password=config.REDIS_PASSWORD, decode_responses=True)
         self.stream = config.STREAM_NAME
         self.group = config.CONSUMER_GROUP
         self.consumer = config.CONSUMER_NAME

@@ -18,6 +18,12 @@ variable "grafana_password" {
   sensitive   = true
 }
 
+variable "redis_password" {
+  description = "Redis password for authentication. Must be set for production."
+  type        = string
+  sensitive   = true
+}
+
 variable "cloudflare_api_token" {
   description = "Cloudflare API token for DNS-01 challenge (cert-manager). Must have Zone:DNS:Edit permission."
   type        = string

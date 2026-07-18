@@ -81,6 +81,13 @@ spec:
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
+          # HIGH-04 Fix: Add startupProbe to allow slow initialization without failing liveness
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            failureThreshold: 30
+            periodSeconds: 10
           volumeMounts:
             - mountPath: /var/run/secrets/eks.amazonaws.com/serviceaccount
               name: aws-iam-token

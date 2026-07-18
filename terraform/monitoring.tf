@@ -119,7 +119,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
   set {
     name  = "grafana.grafana\\.ini.auth\\.anonymous.enabled"
-    value = "true"
+    value = "false"
   }
 
   set {
