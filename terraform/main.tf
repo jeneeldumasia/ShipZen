@@ -2,7 +2,7 @@ terraform {
   cloud {
     organization = "jeneel-shipzen" # TODO: Replace with your HCP Terraform organization name
     workspaces {
-      name = "shipzen-prod"          # TODO: Replace with your HCP Terraform workspace name
+      name = "shipzen-prod" # TODO: Replace with your HCP Terraform workspace name
     }
   }
 
@@ -67,10 +67,10 @@ module "vpc" {
   }
 
   tags = {
-    Environment                                    = "dev"
-    Project                                        = "ShipZen"
-    "kubernetes.io/cluster/shipzen-cluster"      = "shared"
-    "karpenter.sh/discovery"                       = "ShipZen"
+    Environment                             = "dev"
+    Project                                 = "ShipZen"
+    "kubernetes.io/cluster/shipzen-cluster" = "shared"
+    "karpenter.sh/discovery"                = "ShipZen"
   }
 }
 
@@ -204,23 +204,23 @@ resource "aws_iam_role_policy" "builder_ecr" {
     Statement = [
       { Effect = "Allow", Action = ["ecr:GetAuthorizationToken"], Resource = "*" },
       { Effect = "Allow", Action = [
-          # Push
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:PutImage",
-          "ecr:InitiateLayerUpload",
-          "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload",
-          # Read (required by pack/buildpacks ANALYZING phase and crane)
-          "ecr:BatchGetImage",
-          "ecr:GetDownloadUrlForLayer",
-          # Management / scanning
-          "ecr:DescribeImageScanFindings",
-          "ecr:CreateRepository",
-          "ecr:DescribeRepositories"
+        # Push
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:PutImage",
+        "ecr:InitiateLayerUpload",
+        "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload",
+        # Read (required by pack/buildpacks ANALYZING phase and crane)
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer",
+        # Management / scanning
+        "ecr:DescribeImageScanFindings",
+        "ecr:CreateRepository",
+        "ecr:DescribeRepositories"
         ],
-        Resource = [aws_ecr_repository.builds.arn, "${aws_ecr_repository.builds.arn}/*"] },
+      Resource = [aws_ecr_repository.builds.arn, "${aws_ecr_repository.builds.arn}/*"] },
       { Effect = "Allow", Action = ["s3:PutObject", "s3:GetObject", "s3:ListBucket"],
-        Resource = [aws_s3_bucket.build_logs.arn, "${aws_s3_bucket.build_logs.arn}/*"] }
+      Resource = [aws_s3_bucket.build_logs.arn, "${aws_s3_bucket.build_logs.arn}/*"] }
     ]
   })
 }
@@ -281,7 +281,7 @@ resource "aws_secretsmanager_secret" "cloudflare_origin_cert" {
 }
 
 resource "aws_secretsmanager_secret_version" "cloudflare_origin_cert" {
-  secret_id     = aws_secretsmanager_secret.cloudflare_origin_cert.id
+  secret_id = aws_secretsmanager_secret.cloudflare_origin_cert.id
   secret_string = jsonencode({
     "cert" = cloudflare_origin_ca_certificate.origin_cert.certificate
     "key"  = tls_private_key.origin_cert.private_key_pem
@@ -299,8 +299,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "build_logs" {
   bucket = aws_s3_bucket.build_logs.id
 
   rule {
-    id     = "expire_old_logs"
+    id     = "expire-build-logs-90-days"
     status = "Enabled"
+    filter {}
 
     expiration {
       days = 90
@@ -335,8 +336,8 @@ data "aws_iam_policy_document" "github_actions_policy" {
 
   # Terraform state operations (if using S3 backend in future)
   statement {
-    sid     = "TerraformEKSManage"
-    effect  = "Allow"
+    sid    = "TerraformEKSManage"
+    effect = "Allow"
     actions = [
       "eks:Describe*",
       "eks:Update*",
@@ -444,17 +445,17 @@ module "karpenter" {
 
   cluster_name = module.eks.cluster_name
 
-  enable_pod_identity  = false
-  enable_irsa          = true
-  irsa_oidc_provider_arn = module.eks.oidc_provider_arn
-  create_iam_role      = true
-  iam_role_name        = "ShipZenKarpenterController"
-  iam_role_use_name_prefix = false
-  create_node_iam_role = true
-  node_iam_role_name   = "ShipZenKarpenterNodeRole"
+  enable_pod_identity           = false
+  enable_irsa                   = true
+  irsa_oidc_provider_arn        = module.eks.oidc_provider_arn
+  create_iam_role               = true
+  iam_role_name                 = "ShipZenKarpenterController"
+  iam_role_use_name_prefix      = false
+  create_node_iam_role          = true
+  node_iam_role_name            = "ShipZenKarpenterNodeRole"
   node_iam_role_use_name_prefix = false
-  create_access_entry  = true
-  
+  create_access_entry           = true
+
   node_iam_role_additional_policies = {
     AmazonSSMManagedInstanceCore = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
   }

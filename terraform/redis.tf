@@ -50,7 +50,7 @@ spec:
 EOF
 EOT
   }
-  depends_on = [null_resource.apply_cluster_secret_store]
+  depends_on = [null_resource.cluster_secret_store]
 }
 
 resource "helm_release" "redis" {
