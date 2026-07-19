@@ -48,7 +48,7 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: redis
+                  name: redis-auth
                   key: redis-password
             - name: STREAM_NAME
               value: "deploy_stream"

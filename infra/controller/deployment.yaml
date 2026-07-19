@@ -45,7 +45,7 @@ spec:
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: redis
+                  name: redis-auth
                   key: redis-password
             - name: ECR_REGISTRY
               valueFrom:
