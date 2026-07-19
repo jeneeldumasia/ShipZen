@@ -13,6 +13,7 @@ if (githubClientId && githubClientSecret) {
     GitHubProvider({
       clientId: githubClientId,
       clientSecret: githubClientSecret,
+      checks: ["none"],
     })
   )
 } else if (process.env.ENABLE_LOCAL_STUB_AUTH === "true") {
