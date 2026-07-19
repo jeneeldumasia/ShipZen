@@ -28,7 +28,11 @@ export function AutoRefresh({ projectId, deploymentId, token }: { projectId: str
       if (done || isUnmounted) return;
 
       const wsUrl = getWsBaseUrl();
-      ws = new WebSocket(`${wsUrl}/ws/projects/${projectId}/deployments/${deploymentId}/status?token=${token}`);
+      ws = new WebSocket(`${wsUrl}/ws/projects/${projectId}/deployments/${deploymentId}/status`);
+
+      ws.onopen = () => {
+        ws.send(JSON.stringify({ token }));
+      };
 
       ws.onmessage = (event) => {
         try {

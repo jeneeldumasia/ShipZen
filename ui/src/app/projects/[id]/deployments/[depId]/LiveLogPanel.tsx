@@ -30,11 +30,14 @@ export function LiveLogPanel({ projectId, deploymentId, token }: Props) {
     const wsUrl = getWsBaseUrl();
 
     const ws = new WebSocket(
-      `${wsUrl}/ws/projects/${projectId}/deployments/${deploymentId}/logs?token=${token}`
+      `${wsUrl}/ws/projects/${projectId}/deployments/${deploymentId}/logs`
     );
     wsRef.current = ws;
 
-    ws.onopen = () => setConnected(true);
+    ws.onopen = () => {
+      setConnected(true);
+      ws.send(JSON.stringify({ token }));
+    };
 
     ws.onmessage = (e: MessageEvent) => {
       const line = (e.data as string).replace(ANSI_RE, "");
