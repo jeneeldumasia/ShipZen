@@ -25,7 +25,7 @@ resource "null_resource" "apply_node_exporter_exception" {
     always_run = timestamp()
   }
   provisioner "local-exec" {
-    command = "aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster && kubectl apply -f ../infra/system/kyverno-exception.yaml"
+    command = "aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster && kubectl apply -f ../infra/system/kyverno-exception.yaml && sleep 10"
   }
   depends_on = [kubernetes_namespace.observability, helm_release.kyverno]
 }
@@ -36,6 +36,7 @@ resource "helm_release" "kube_prometheus_stack" {
   chart            = "kube-prometheus-stack"
   namespace        = kubernetes_namespace.observability.metadata[0].name
   create_namespace = false
+  depends_on       = [null_resource.apply_node_exporter_exception]
 
   # Scan all namespaces for ServiceMonitor resources, not just observability
   set {
