@@ -23,13 +23,14 @@ jobs:
         run: |
           # Pin to a specific known-good version. Update deliberately after reviewing release notes.
           TRIVY_VERSION="0.69.3"
-          curl -sfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-            -o trivy.tar.gz
+          TRIVY_ARCHIVE="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"
+          curl -sfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${TRIVY_ARCHIVE}" \
+            -o "${TRIVY_ARCHIVE}"
           # Verify checksum
           curl -sfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_checksums.txt" \
             -o trivy_checksums.txt
-          grep "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" trivy_checksums.txt | sha256sum --check
-          tar -xzf trivy.tar.gz trivy
+          grep "${TRIVY_ARCHIVE}" trivy_checksums.txt | sha256sum --check
+          tar -xzf "${TRIVY_ARCHIVE}" trivy
           sudo mv trivy /usr/local/bin/trivy
           trivy --version
 
