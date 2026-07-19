@@ -16,8 +16,7 @@ spec:
     - resources:
         kinds:
         - Pod
-        - DaemonSet
         namespaces:
         - observability
         names:
-        - "kube-prometheus-stack-prometheus-node-exporter"
+        - "*node-exporter*"
