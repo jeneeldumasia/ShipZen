@@ -20,4 +20,4 @@ spec:
         namespaces:
         - observability
         names:
-        - "*node-exporter*"
+        - "kube-prometheus-stack-prometheus-node-exporter"
