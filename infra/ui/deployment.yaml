@@ -43,6 +43,8 @@ spec:
               value: "https://shipzen.jeneeldumasia.codes"
             - name: NODE_OPTIONS
               value: "--dns-result-order=ipv4first"
+            - name: ENABLE_LOCAL_STUB_AUTH
+              value: "true"
             - name: AUTH_SECRET
               valueFrom:
                 secretKeyRef:
