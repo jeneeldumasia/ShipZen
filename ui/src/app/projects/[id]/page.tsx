@@ -13,14 +13,15 @@ import { ProjectShortcuts } from "./ProjectShortcuts";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectPage({ params }: { params: { id: string } }) {
+export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
   let project;
   let deployments: Deployment[] = [];
 
-  try { project = await api.projects.get(params.id); }
+  try { project = await api.projects.get(resolvedParams.id); }
   catch { notFound(); }
 
-  try { deployments = await api.deployments.list(params.id); }
+  try { deployments = await api.deployments.list(resolvedParams.id); }
   catch {}
 
   const running  = deployments.filter(d => d.state === "Running").length;

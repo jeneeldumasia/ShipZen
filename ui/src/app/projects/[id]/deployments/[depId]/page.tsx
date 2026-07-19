@@ -53,7 +53,8 @@ function Pulse({ state, url }: { state: string, url?: string }) {
   );
 }
 
-export default async function DeploymentPage({ params }: { params: { id: string; depId: string } }) {
+export default async function DeploymentPage(props: { params: Promise<{ id: string; depId: string }> }) {
+  const params = await props.params;
   let deployment;
   let project;
   try { 
