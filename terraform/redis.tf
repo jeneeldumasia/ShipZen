@@ -30,7 +30,8 @@ resource "null_resource" "apply_redis_external_secret" {
   provisioner "local-exec" {
     command = <<EOT
       kubectl create namespace shipzen-system --dry-run=client -o yaml | kubectl apply -f -
-      cat <<EOF | aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster && kubectl apply -f -
+      aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster
+      cat <<EOF | kubectl apply -f -
 apiVersion: external-secrets.io/v1beta1
 kind: ExternalSecret
 metadata:

@@ -7,10 +7,10 @@ spec:
   exceptions:
   - policyName: "disallow-host-namespaces"
     ruleNames:
-    - "autogen-host-namespaces"
+    - "host-namespaces"
   - policyName: "disallow-host-path"
     ruleNames:
-    - "autogen-host-path"
+    - "host-path"
   match:
     any:
     - resources:
