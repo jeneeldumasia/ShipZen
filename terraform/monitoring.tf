@@ -36,7 +36,6 @@ resource "helm_release" "kube_prometheus_stack" {
   chart            = "kube-prometheus-stack"
   namespace        = kubernetes_namespace.observability.metadata[0].name
   create_namespace = false
-  depends_on       = [null_resource.apply_node_exporter_exception]
 
   # Scan all namespaces for ServiceMonitor resources, not just observability
   set {
