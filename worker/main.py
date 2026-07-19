@@ -105,7 +105,7 @@ _semaphore = threading.Semaphore(MAX_WORKERS)
 # PERF-04 Fix: Shared module-level Redis client
 _redis_client = redis.Redis(host=config.REDIS_HOST, port=config.REDIS_PORT, password=config.REDIS_PASSWORD)
 
-from worker.database import get_db_connection
+from database import get_db_connection
 
 def record_build(deployment_id: str, s3_key: str, status: str):
     build_id = str(uuid.uuid4())
