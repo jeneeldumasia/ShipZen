@@ -19,7 +19,7 @@ class DeploymentState:
     DLQ = "DLQ"
 
 
-from worker.database import get_db_connection
+from database import get_db_connection
 
 class StateMachine:
     def __init__(self):
