@@ -5,9 +5,12 @@ metadata:
   namespace: observability
 spec:
   exceptions:
-  - policyName: "*"
+  - policyName: "disallow-host-namespaces"
     ruleNames:
-    - "*"
+    - "autogen-host-namespaces"
+  - policyName: "disallow-host-path"
+    ruleNames:
+    - "autogen-host-path"
   match:
     any:
     - resources:
