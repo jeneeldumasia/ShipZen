@@ -20,15 +20,7 @@ resource "kubernetes_namespace" "observability" {
   depends_on = [time_sleep.wait_for_cluster_auth]
 }
 
-resource "null_resource" "apply_node_exporter_exception" {
-  triggers = {
-    always_run = timestamp()
-  }
-  provisioner "local-exec" {
-    command = "aws eks update-kubeconfig --region ${var.aws_region} --name shipzen-cluster && kubectl apply -f ../infra/system/kyverno-exception.yaml && sleep 10"
-  }
-  depends_on = [kubernetes_namespace.observability, helm_release.kyverno]
-}
+
 
 resource "helm_release" "kube_prometheus_stack" {
   name             = "kube-prometheus-stack"
@@ -161,5 +153,5 @@ resource "helm_release" "kube_prometheus_stack" {
   }
 
   timeout = 900
-  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook, helm_release.postgresql, null_resource.apply_node_exporter_exception]
+  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook, helm_release.postgresql, helm_release.kyverno_policies]
 }

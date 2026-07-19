@@ -27,11 +27,22 @@ resource "helm_release" "kyverno_policies" {
   repository       = "https://kyverno.github.io/kyverno/"
   chart            = "kyverno-policies"
   namespace        = "kyverno"
+
   create_namespace = true
 
   values = [
     yamlencode({
       validationFailureAction = "Enforce"
+      validationFailureActionOverrides = {
+        all = [
+          {
+            action = "Audit"
+            namespaces = [
+              "observability"
+            ]
+          }
+        ]
+      }
     })
   ]
 
