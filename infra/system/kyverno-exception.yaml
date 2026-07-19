@@ -16,6 +16,7 @@ spec:
     - resources:
         kinds:
         - Pod
+        - apps/v1/DaemonSet
         namespaces:
         - observability
         names:
