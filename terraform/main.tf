@@ -1,4 +1,5 @@
 terraform {
+  # Trigger deployment pipeline
   cloud {
     organization = "jeneel-shipzen" # TODO: Replace with your HCP Terraform organization name
     workspaces {
