@@ -19,3 +19,4 @@ resources:
   - ecr-token-rotator-sa.yaml
   - ecr-token-rotator.yaml
   - github-app-secret.yaml
+  - github-secret.yaml
