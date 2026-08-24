@@ -38,6 +38,13 @@ provider "cloudflare" {
 
 provider "aws" {
   region = var.aws_region
+  default_tags {
+    tags = {
+      Project     = "ShipZen"
+      Environment = "prod"
+      ManagedBy   = "Terraform"
+    }
+  }
 }
 
 # Task 5 — resolve the current AWS account ID dynamically.
