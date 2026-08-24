@@ -100,8 +100,8 @@ module "eks" {
   eks_managed_node_groups = {
     platform_nodes = {
       min_size       = 1
-      max_size       = 4
-      desired_size   = 2
+      max_size       = 5
+      desired_size   = 3
       instance_types = [var.platform_instance_type]
       ami_type       = "AL2023_x86_64_STANDARD"
 
