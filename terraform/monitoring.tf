@@ -160,10 +160,10 @@ resource "helm_release" "kube_prometheus_stack" {
     value = "ALL"
   }
 
-  # Disable nodeExporter to bypass Kyverno hostNetwork/hostPath policy enforcement
+  # Enable nodeExporter. Exception added via Kyverno PolicyException.
   set {
     name  = "nodeExporter.enabled"
-    value = "false"
+    value = "true"
   }
 
   # FIX-10: Prometheus persistence (10Gi gp2 PVC) and 30d retention
