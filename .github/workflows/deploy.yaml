@@ -86,6 +86,7 @@ jobs:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_pg_password: ${{ secrets.PG_PASSWORD }}
           TF_VAR_grafana_password: ${{ secrets.GRAFANA_PASSWORD }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
         run: terraform plan -out=tfplan
 
       - name: Configure kubectl
@@ -98,6 +99,7 @@ jobs:
           TF_VAR_cloudflare_api_token: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           TF_VAR_pg_password: ${{ secrets.PG_PASSWORD }}
           TF_VAR_grafana_password: ${{ secrets.GRAFANA_PASSWORD }}
+          TF_VAR_aws_region: ${{ env.AWS_REGION }}
         run: |
           if ! terraform apply -auto-approve tfplan; then
             echo "::error::Terraform Apply failed! Dumping observability cluster state for debugging..."
