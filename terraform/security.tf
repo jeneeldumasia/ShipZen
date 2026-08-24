@@ -12,21 +12,19 @@ resource "helm_release" "kyverno" {
   values = [
     yamlencode({
       installCRDs = true
-      config = {
-        webhooks = [
-          {
-            namespaceSelector = {
-              matchExpressions = [
-                {
-                  key      = "kubernetes.io/metadata.name"
-                  operator = "NotIn"
-                  values   = ["kube-system", "observability", "shipzen-build"]
-                }
-              ]
-            }
+      webhooks = [
+        {
+          namespaceSelector = {
+            matchExpressions = [
+              {
+                key      = "kubernetes.io/metadata.name"
+                operator = "NotIn"
+                values   = ["kube-system", "observability", "shipzen-build"]
+              }
+            ]
           }
-        ]
-      }
+        }
+      ]
     })
   ]
 
