@@ -49,38 +49,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
   set {
     name  = "grafana.persistence.enabled"
-    value = "false"
-  }
-
-  set {
-    name  = "grafana.grafana\\.ini.database.type"
-    value = "postgres"
-  }
-
-  set {
-    name  = "grafana.grafana\\.ini.database.host"
-    value = "postgres-postgresql.shipzen-system.svc.cluster.local:5432"
-  }
-
-  set {
-    name  = "grafana.grafana\\.ini.database.name"
-    value = "grafana"
-  }
-
-  set {
-    name  = "grafana.grafana\\.ini.database.user"
-    value = "shipzen"
-  }
-
-  # Use env var for password to avoid .ini parser breaking on special characters like # or ;
-  set {
-    name  = "grafana.env.GF_DATABASE_PASSWORD"
-    value = local.pg_password
-  }
-
-  set {
-    name  = "grafana.grafana\\.ini.database.ssl_mode"
-    value = "disable"
+    value = "false" # Disabled here, but enabled at the bottom via FIX-6
   }
 
   set {

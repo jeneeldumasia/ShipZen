@@ -52,15 +52,7 @@ resource "helm_release" "postgresql" {
     value = local.pg_password
   }
 
-  # FIX-5: Create a dedicated database for Grafana to avoid polluting the app DB
-  set {
-    name  = "primary.extraEnvVars[0].name"
-    value = "POSTGRESQL_EXTRA_DATABASES"
-  }
-  set {
-    name  = "primary.extraEnvVars[0].value"
-    value = "grafana"
-  }
+  # (Removed FIX-5: Grafana uses SQLite on its PVC instead)
 
   set {
     name  = "auth.postgresPassword"
