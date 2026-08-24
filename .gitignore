@@ -43,4 +43,5 @@ scratch_deployhub/
 p o l i c y _ u p d a t e . j s o n  
 *-secret.json
  
- 
+# AI Context
+.ai/
