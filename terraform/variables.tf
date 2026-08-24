@@ -34,5 +34,5 @@ variable "cloudflare_api_token" {
 variable "platform_instance_type" {
   description = "EC2 instance type for the platform node group"
   type        = string
-  default     = "c7i-flex.large"
+  default     = "t3.large"
 }

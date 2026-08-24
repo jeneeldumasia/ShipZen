@@ -78,7 +78,8 @@ resource "helm_release" "external_secrets" {
   }
 
   # ESO used to depend on cert-manager, now it does not
-  depends_on = [time_sleep.wait_for_cluster_auth]
+  # It must wait for the ALB webhook, otherwise its Service validations fail
+  depends_on = [time_sleep.wait_for_cluster_auth, time_sleep.wait_for_alb_webhook]
 }
 
 # ── AWS Load Balancer Controller ─────────────────────────────────────────────
