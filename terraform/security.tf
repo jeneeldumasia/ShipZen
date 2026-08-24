@@ -12,10 +12,17 @@ resource "helm_release" "kyverno" {
   values = [
     yamlencode({
       installCRDs = true
-      resourceFiltersIncludeNamespaces = [
-        "observability",
-        "shipzen-build"
-      ]
+      config = {
+        resourceFilters = [
+          "[Event,*,*]",
+          "[*/*,kube-system,*]",
+          "[*/*,kube-public,*]",
+          "[*/*,kube-node-lease,*]",
+          "[Node,*,*]",
+          "[*/*,observability,*]",
+          "[*/*,shipzen-build,*]"
+        ]
+      }
     })
   ]
 
