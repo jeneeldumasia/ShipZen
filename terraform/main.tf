@@ -485,15 +485,20 @@ data "aws_iam_policy_document" "github_actions_policy" {
       "eks:Update*",
       "eks:List*",
       "ec2:Describe*",
-      "iam:GetRole", "iam:CreateRole", "iam:DeleteRole",
+      "iam:GetRole", "iam:CreateRole", "iam:DeleteRole", "iam:UpdateRole",
       "iam:AttachRolePolicy", "iam:DetachRolePolicy",
       "iam:PutRolePolicy", "iam:DeleteRolePolicy",
       "iam:GetRolePolicy", "iam:ListRolePolicies",
       "iam:ListAttachedRolePolicies",
       "iam:CreateOpenIDConnectProvider", "iam:DeleteOpenIDConnectProvider",
-      "iam:GetOpenIDConnectProvider",
+      "iam:GetOpenIDConnectProvider", "iam:ListOpenIDConnectProviders",
       "iam:TagRole", "iam:UntagRole",
       "iam:PassRole",
+      "iam:GetPolicy", "iam:GetPolicyVersion", "iam:CreatePolicy",
+      "iam:CreatePolicyVersion", "iam:DeletePolicy", "iam:DeletePolicyVersion",
+      "iam:ListPolicyVersions", "iam:TagPolicy", "iam:UntagPolicy",
+      "logs:CreateLogGroup", "logs:DeleteLogGroup", "logs:DescribeLogGroups",
+      "logs:PutRetentionPolicy", "logs:ListTagsForResource", "logs:TagResource", "logs:UntagResource"
     ]
     resources = ["*"]
   }
