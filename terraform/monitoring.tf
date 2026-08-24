@@ -64,7 +64,7 @@ resource "helm_release" "kube_prometheus_stack" {
 
   set {
     name  = "grafana.grafana\\.ini.database.name"
-    value = "shipzen"
+    value = "grafana"
   }
 
   set {
@@ -121,6 +121,20 @@ resource "helm_release" "kube_prometheus_stack" {
 
   # Enable the Grafana sidecar to pick up ConfigMap-based dashboards
   # (observability/dashboards/grafana-dashboards.yaml uses label grafana_dashboard: "1")
+  # FIX-6: Grafana persistence (2Gi gp2 PVC)
+  set {
+    name  = "grafana.persistence.enabled"
+    value = "true"
+  }
+  set {
+    name  = "grafana.persistence.storageClassName"
+    value = "gp2"
+  }
+  set {
+    name  = "grafana.persistence.size"
+    value = "2Gi"
+  }
+
   set {
     name  = "grafana.sidecar.dashboards.enabled"
     value = "true"
@@ -150,6 +164,24 @@ resource "helm_release" "kube_prometheus_stack" {
   set {
     name  = "nodeExporter.enabled"
     value = "true"
+  }
+
+  # FIX-10: Prometheus persistence (10Gi gp2 PVC) and 30d retention
+  set {
+    name  = "prometheus.prometheusSpec.retention"
+    value = "30d"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.storageClassName"
+    value = "gp2"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.accessModes[0]"
+    value = "ReadWriteOnce"
+  }
+  set {
+    name  = "prometheus.prometheusSpec.storageSpec.volumeClaimTemplate.spec.resources.requests.storage"
+    value = "10Gi"
   }
 
   timeout = 900

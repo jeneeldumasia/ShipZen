@@ -167,9 +167,8 @@ resource "time_sleep" "wait_for_cluster_auth" {
 
 
 
-# ── ECR Repository ────────────────────────────────────────────────────────────
-# Task 5: ECR repo for built tenant images.
-# Builder pushes here; tenant pods pull from here via IRSA.
+# ── ECR Repository (Tenant Images) ───────────────────────────────────────────
+# Builder pushes tenant app images here; tenant pods pull via IRSA.
 resource "aws_ecr_repository" "builds" {
   name                 = "shipzen-builds"
   image_tag_mutability = "IMMUTABLE"
@@ -178,8 +177,145 @@ resource "aws_ecr_repository" "builds" {
     scan_on_push = true
   }
 
-  # Clean up on destroy — matches teardown-per-session workflow
   force_delete = true
+}
+
+# Expire untagged tenant images after 30 days.
+# Tagged images are kept indefinitely — a tenant's running deployment depends on them.
+resource "aws_ecr_lifecycle_policy" "builds" {
+  repository = aws_ecr_repository.builds.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Expire untagged images after 30 days"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 30
+        }
+        action = { type = "expire" }
+      }
+    ]
+  })
+}
+
+# ── ECR Repositories (Platform Service Images) ────────────────────────────────
+# build-push.yaml pushes to shipzen/<component> paths.
+# IMMUTABLE tags enforce that sha-<hash> tags cannot be overwritten.
+locals {
+  platform_services = ["api", "controller", "worker", "ui"]
+}
+
+resource "aws_ecr_repository" "platform" {
+  for_each = toset(local.platform_services)
+
+  name                 = "shipzen/${each.key}"
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  force_delete = true
+}
+
+# Lifecycle: expire untagged images after 30 days; keep the 10 most recent tagged
+# images so rollbacks to any of the last 10 deployments are always available.
+resource "aws_ecr_lifecycle_policy" "platform" {
+  for_each   = aws_ecr_repository.platform
+  repository = each.value.name
+
+  policy = jsonencode({
+    rules = [
+      {
+        rulePriority = 1
+        description  = "Expire untagged images after 30 days"
+        selection = {
+          tagStatus   = "untagged"
+          countType   = "sinceImagePushed"
+          countUnit   = "days"
+          countNumber = 30
+        }
+        action = { type = "expire" }
+      },
+      {
+        rulePriority = 2
+        description  = "Keep only the 10 most recent tagged images"
+        selection = {
+          tagStatus   = "tagged"
+          tagPrefixList = ["sha-"]
+          countType   = "imageCountMoreThan"
+          countNumber = 10
+        }
+        action = { type = "expire" }
+      }
+    ]
+  })
+}
+
+# ── ShipZenECRRotatorRole ─────────────────────────────────────────────────────
+# IRSA role for the ecr-token-rotator CronJob in shipzen-system.
+# Rotates the ECR pull token in Secrets Manager every 6 hours so tenant pods
+# can always authenticate to ECR without embedded static credentials.
+module "irsa_ecr_rotator" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name = "ShipZenECRRotatorRole"
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["shipzen-system:ecr-token-rotator-sa"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "ecr_rotator" {
+  name = "ShipZenECRRotatorPolicy"
+  role = module.irsa_ecr_rotator.iam_role_name
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "GetECRToken"
+        Effect = "Allow"
+        Action = ["ecr:GetAuthorizationToken"]
+        Resource = "*"
+      },
+      {
+        Sid    = "WriteECRTokenToSecretsManager"
+        Effect = "Allow"
+        Action = ["secretsmanager:PutSecretValue", "secretsmanager:CreateSecret", "secretsmanager:DescribeSecret"]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:shipzen/ecr-pull-token*"
+      }
+    ]
+  })
+}
+
+# ── EKS Control Plane CloudWatch Log Groups (30-day retention) ─────────────────
+# EKS creates these log groups automatically but with NO retention policy
+# (logs accumulate forever). We import and manage retention explicitly.
+locals {
+  eks_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
+}
+
+resource "aws_cloudwatch_log_group" "eks_control_plane" {
+  for_each = toset(local.eks_log_types)
+
+  name              = "/aws/eks/shipzen-cluster/${each.key}"
+  retention_in_days = 30
+
+  tags = {
+    Project     = "ShipZen"
+    Environment = "prod"
+  }
+
+  depends_on = [module.eks]
 }
 
 # ── Builder Service Account and Namespace ──────────────────────────────────────
@@ -295,17 +431,22 @@ resource "aws_s3_bucket" "build_logs" {
   force_destroy = true # Required for terraform destroy to succeed on non-empty bucket
 }
 
-# MED-10 Fix: Add S3 lifecycle rule to expire build logs after 90 days
+# Lifecycle: expire build logs after 30 days (production retention policy).
 resource "aws_s3_bucket_lifecycle_configuration" "build_logs" {
   bucket = aws_s3_bucket.build_logs.id
 
   rule {
-    id     = "expire-build-logs-90-days"
+    id     = "expire-build-logs-30-days"
     status = "Enabled"
     filter {}
 
     expiration {
-      days = 90
+      days = 30
+    }
+
+    # Also expire incomplete multipart uploads after 7 days
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
   }
 }
@@ -357,12 +498,19 @@ data "aws_iam_policy_document" "github_actions_policy" {
     resources = ["*"]
   }
 
-  # ECR — push/pull built images
+  # ECR — GetAuthorizationToken is global (no resource restriction allowed)
   statement {
-    sid    = "ECRAccess"
+    sid    = "ECRAuth"
+    effect = "Allow"
+    actions = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  # ECR — push/pull to the 4 platform service repos and the tenant builds repo
+  statement {
+    sid    = "ECRRepoAccess"
     effect = "Allow"
     actions = [
-      "ecr:GetAuthorizationToken",
       "ecr:BatchCheckLayerAvailability",
       "ecr:GetDownloadUrlForLayer",
       "ecr:BatchGetImage",
@@ -374,8 +522,13 @@ data "aws_iam_policy_document" "github_actions_policy" {
       "ecr:CreateRepository",
       "ecr:DeleteRepository",
       "ecr:TagResource",
+      "ecr:ListImages",
+      "ecr:DescribeImages",
     ]
-    resources = ["*"]
+    resources = concat(
+      [for repo in aws_ecr_repository.platform : repo.arn],
+      [aws_ecr_repository.builds.arn]
+    )
   }
 
   # S3 — build log bucket only
@@ -386,6 +539,21 @@ data "aws_iam_policy_document" "github_actions_policy" {
     resources = [
       aws_s3_bucket.build_logs.arn,
       "${aws_s3_bucket.build_logs.arn}/*"
+    ]
+  }
+
+  # Secrets Manager — needed for deploy-secrets workflow to push OAuth/app secrets
+  statement {
+    sid    = "SecretsManagerDeploy"
+    effect = "Allow"
+    actions = [
+      "secretsmanager:CreateSecret",
+      "secretsmanager:PutSecretValue",
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:GetSecretValue",
+    ]
+    resources = [
+      "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:shipzen/*"
     ]
   }
 }
