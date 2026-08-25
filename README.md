@@ -1,100 +1,90 @@
-# ShipZen
+# aws-nuke
 
-**ShipZen** is an enterprise-grade Internal Developer Platform (IDP) designed to orchestrate and automate Kubernetes deployments seamlessly. It provides a "Heroku-like" developer experience on top of raw Kubernetes primitives, utilizing Cloud Native Buildpacks, dynamic Gateway API routing, and state machine-driven asynchronous job execution.
+[![license](https://img.shields.io/github/license/ekristen/aws-nuke.svg)](https://github.com/ekristen/aws-nuke/blob/main/LICENSE)
+[![release](https://img.shields.io/github/release/ekristen/aws-nuke.svg)](https://github.com/ekristen/aws-nuke/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ekristen/aws-nuke)](https://goreportcard.com/report/github.com/ekristen/aws-nuke)
+[![Maintainability](https://api.codeclimate.com/v1/badges/bf05fb12c69f1ea7f257/maintainability)](https://codeclimate.com/github/ekristen/aws-nuke/maintainability)
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/ekristen/aws-nuke/total)
+![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/ekristen/aws-nuke/latest/total)
 
-## Executive Summary
 
-ShipZen empowers development teams to deploy source code directly to a secure, isolated Kubernetes environment without writing `Dockerfiles` or YAML manifests. 
 
-### Key Features
-- **Zero-Config Deployments**: Automatic runtime detection and rootless container building via Cloud Native Buildpacks (CNB).
-- **Asynchronous Orchestration**: Python-based Worker daemon leveraging Redis Streams for robust, fault-tolerant build pipelines.
-- **Continuous Reconciliation**: A custom Python Controller continuously reconciles desired state stored in PostgreSQL against active Kubernetes resources.
-- **Dynamic Routing**: Managed via Kubernetes Gateway API (Envoy Gateway), providing automatic TLS termination and strict host-based routing per deployment.
-- **Deep Observability**: Out-of-the-box integration with the `kube-prometheus-stack` for Prometheus metrics, Grafana dashboards, and pod-level logs.
-- **Multi-Tenant Isolation**: Each project executes within a strictly isolated Kubernetes namespace.
+## Overview
 
-### Technology Stack
-- **Frontend**: Next.js 14, Tailwind CSS, TypeScript
-- **Backend / Workers**: Python, FastAPI, Psycopg2, Redis
-- **Infrastructure**: Terraform, Amazon EKS (Kubernetes 1.36+), Karpenter (Auto-scaling)
-- **Networking**: Envoy Gateway API, ExternalDNS, cert-manager
-- **Observability**: Prometheus, Grafana, Node Exporter
+Remove all resources from an AWS account.
 
----
+*aws-nuke* is stable, but it is likely that not all AWS resources are covered by it. Be encouraged to add missing
+resources and create a Pull Request or to create an [Issue](https://github.com/ekristen/aws-nuke/issues/new).
 
-## Architecture Overview
+## What's New in Version 3
 
-1. **API Server (`api/`)**: FastAPI REST interface handling authentication, webhooks, and state mutations.
-2. **Worker (`worker/`)**: Background daemon consuming Redis streams. Handles repository cloning, Buildpack manifest generation, and Kubernetes Job orchestration.
-3. **Controller (`controller/`)**: Reconciliation loop. Watches PostgreSQL for desired deployment states and translates them into raw Kubernetes Deployments, Services, and HTTPRoutes.
-4. **Next.js UI (`ui/`)**: A sleek, modern dashboard providing a real-time view into the deployment state machine, build logs, and platform health.
+Version 3 is a rewrite of this tool using [libnuke](https://github.com/ekristen/libnuke) with a focus on improving a number of the outstanding things
+that I couldn't get done with the original project without separating out the core code into a library. See Goals
+below for more.
 
----
+This is not a comprehensive list, but here are some of the highlights:
 
-## Local Development Setup
+* New Feature: Signed Darwin Binaries for macOS
+* New Feature: Published Homebrew Tap (ekristen/tap/aws-nuke@3)
+* New Feature: Global Filters
+* New Feature: Run Against All Enabled Regions
+* New Feature: Explain Account and Explain Config Commands
+* Upcoming Feature: Filter Groups (**in progress**)
+* Breaking Change: `root` command no longer triggers the run, must use subcommand `run` (alias: `nuke`)
+* Breaking Change: CloudFormation Stacks now support a hold and wait for parent deletion process
+* Breaking Change: Nested CloudFormation Stacks are now eligible for deletion and no longer omitted
+* Completely rewrote the core of the tool as a dedicated library [libnuke](https://github.com/ekristen/libnuke)
+  * This library has over 95% test coverage which makes iteration and new features easier to implement.
+* Semantic Releases with notifications on issues / pull requests
+* Context is passed throughout the entire library now, including the listing function and the removal function
+  * This is in preparation for supporting AWS SDK Go v2
+* New Resources
+* Broke away from rebuy-de/aws-nuke project as a fork for reasons outlined in the history section
 
-To run ShipZen locally or execute the test suite, ensure your machine meets the prerequisites.
+### Goals
 
-### Prerequisites
-- Python 3.14+
-- Node.js 20+
-- `pytest`, `flake8`
-- (Optional) Docker for local Testcontainers execution
+- [x] Easier maintainability and bug fixing, see go report and code climate badges above
+- [x] Adding additional tests around the core library
+- [ ] Adding more tests around specific resource types
+- [x] Adding additional resources and tooling to make adding resources easier
+- [x] Adding documentation for adding resources and using the tool
+- [ ] Consider adding DAG for dependencies between resource types and individual resources
+- [ ] Support for AWS SDK Go v2
 
-### 1. UI Development
-The ShipZen frontend is a Next.js application located in `ui/`.
-```bash
-cd ui
-npm install
-npm run dev
-```
+## Documentation
 
-### 2. Python Backend & Workers
-The backend consists of the `api`, `worker`, and `controller` modules. 
+All documentation is in the [docs/](docs) directory and is built using [Material for Mkdocs](https://squidfunk.github.io/mkdocs-material/). 
 
-#### Environment Setup
-```bash
-python -m venv venv
-# Windows: venv\Scripts\activate | Mac/Linux: source venv/bin/activate
-pip install -r api/requirements.txt
-pip install -r worker/requirements.txt
-pip install -r controller/requirements.txt
-pip install -r tests/requirements.txt
+It is hosted at [https://ekristen.github.io/aws-nuke/](https://ekristen.github.io/aws-nuke/).
 
-# Required for local testing bypasses and admin bootstrapping
-export ENABLE_LOCAL_STUB_AUTH=true
-export ADMIN_EMAILS="admin@shipzen.local"
-```
+## History of this Fork
 
-#### Running Tests
-ShipZen uses `pytest` for unit and integration testing. The test suite is configured to gracefully skip tests requiring a live Docker daemon if one is not present.
+**Important:** this is a full fork of the original tool written by the folks over at [rebuy-de](https://github.com/rebuy-de).
+This fork became necessary after attempting to make contributions and respond to issues to learn that the current
+maintainers only have time to work on the project about once a month and while receptive to bringing in other 
+people to help maintain, made it clear it would take time. Considering the feedback cycle was already weeks on 
+initial communications, I had to make the hard decision to fork and maintain it.
 
-```bash
-pytest tests/
-```
+### libnuke
 
-#### Linting and Code Quality
-We enforce PEP8 standards and strict ESLint rules to maintain a production-ready codebase.
-```bash
-# Python
-flake8 api/ worker/ controller/
+I also needed a version of this tool for Azure and GCP, and initially I just copied and altered the code I needed for
+Azure, but I didn't want to have to maintain multiple copies of the same code, so I decided to create 
+[libnuke](https://github.com/ekristen/libnuke) to abstract all the code that was common between the two tools and write
+proper unit tests for it. 
 
-# Next.js
-npm run lint --prefix ui
-```
+## Attribution, License, and Copyright
 
----
+The rewrite of this tool to use [libnuke](https://github.com/ekristen/libnuke) would not have been possible without the
+hard work that came before me on the original tool by the team and contributors over at [rebuy-de](https://github.com/rebuy-de)
+and their original work on [rebuy-de/aws-nuke](https://github.com/rebuy-de/aws-nuke).
 
-## Infrastructure and Deployment
+This tool is licensed under the MIT license. See the [LICENSE](LICENSE) file for more information. The bulk of this
+tool was rewritten to use [libnuke](https://github.com/ekristen/libnuke) which was in part originally sourced from
+[rebuy-de/aws-nuke](https://github.com/rebuy-de/aws-nuke).
 
-ShipZen's infrastructure is fully codified using Terraform, located in the `terraform/` directory.
+## Contribute
 
-### Quick Start (AWS EKS)
-```bash
-cd terraform
-terraform init
-terraform apply -var="aws_region=us-east-1"
-```
+You can contribute to *aws-nuke* by forking this repository, making your changes and creating a Pull Request against
+this repository. If you are unsure how to solve a problem or have other questions about a contributions, please create
+a GitHub issue.
 
-*Note: Production deployments require configuring GitHub Actions OIDC federation and AWS IAM roles. See the `docs/` folder for comprehensive operational runbooks and Threat Models.*
