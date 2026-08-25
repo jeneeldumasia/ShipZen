@@ -45,3 +45,8 @@ p o l i c y _ u p d a t e . j s o n
  
 # AI Context
 .ai/
+
+# AWS Nuke Tools
+aws-nuke.exe
+LICENSE
+nuke-config.yaml
