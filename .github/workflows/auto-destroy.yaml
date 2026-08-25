@@ -17,7 +17,7 @@ permissions:
 env:
   MAX_UPTIME_HOURS: 6
   CLUSTER_NAME: shipzen-cluster
-  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+  AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
 
 jobs:
   check-and-destroy:

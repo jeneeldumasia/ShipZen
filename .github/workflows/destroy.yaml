@@ -10,7 +10,7 @@ jobs:
   terraform-destroy:
     runs-on: ubuntu-latest
     env:
-      AWS_REGION: ''
+      AWS_REGION: ${{ secrets.AWS_REGION || 'ap-south-1' }}
       cluster_not_found: 'false'
     steps:
       - name: Checkout code
