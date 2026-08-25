@@ -24,7 +24,7 @@ class Config:
 
     MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
     PENDING_MESSAGE_TIMEOUT_MS = int(
-        os.getenv("PENDING_MESSAGE_TIMEOUT_MS", "300000"))  # 5 minutes
+        os.getenv("PENDING_MESSAGE_TIMEOUT_MS", "3900000"))  # 65 minutes
 
 
 config = Config()

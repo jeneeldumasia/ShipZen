@@ -12,6 +12,7 @@ import time
 import datetime
 import uuid
 import logging
+import asyncio
 from typing import Optional
 
 import redis as redis_lib
@@ -92,10 +93,45 @@ def get_redis() -> redis_lib.Redis:
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
 
+async def outbox_relay():
+    """Continuously poll the outbox_events table and forward to Redis."""
+    while True:
+        try:
+            with get_connection() as conn:
+                with conn.cursor(cursor_factory=DictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM outbox_events
+                        ORDER BY id ASC
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 10;
+                    """)
+                    events = cur.fetchall()
+                    if events:
+                        r = get_redis()
+                        pipe = r.pipeline()
+                        for event in events:
+                            pipe.xadd(event['stream_name'], event['payload'], maxlen=10000)
+                        pipe.execute()
+
+                        ids = tuple(event['id'] for event in events)
+                        cur.execute("DELETE FROM outbox_events WHERE id IN %s;", (ids,))
+                    conn.commit()
+            if not events:
+                await asyncio.sleep(1)
+        except Exception as e:
+            logger.error(f"Outbox relay error: {e}")
+            await asyncio.sleep(5)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    task = asyncio.create_task(outbox_relay())
     yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
     await _aioredis_client.aclose()
     _redis_client.close()
 
@@ -599,38 +635,26 @@ def create_deployment(request: Request, project_id: str, body: CreateDeploymentR
                     ),
                 )
                 deployment = dict(cur.fetchone())
+
+                # Transactional outbox
+                payload = {
+                    "deployment_id": deployment_id,
+                    "project_id":    project_id,
+                    "repo_url":      body.repo_url,
+                    "branch":        body.branch,
+                    "image_name":    image_uri,
+                    "queued_at":     queued_at,
+                    "retries":       "0",
+                }
+                cur.execute(
+                    "INSERT INTO outbox_events (stream_name, event_type, payload) VALUES (%s, %s, %s);",
+                    (STREAM_NAME, "deploy", json.dumps(payload))
+                )
             conn.commit()
     except Exception as e:
         logger.error(f"Failed to create deployment: {e}")
         raise HTTPException(
             status_code=500, detail="Failed to create deployment")
-
-    # Enqueue to Redis stream — worker picks this up and hands off to builder
-    try:
-        r = get_redis()
-        r.xadd(STREAM_NAME, {
-            "deployment_id": deployment_id,
-            "project_id":    project_id,
-            "repo_url":      body.repo_url,
-            "branch":        body.branch,
-            "image_name":    image_uri,
-            "queued_at":     queued_at,
-            "retries":       "0",
-        }, maxlen=10000)
-    except Exception as e:
-        logger.error(f"Failed to enqueue deployment {deployment_id}: {e}")
-        try:
-            with get_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "UPDATE deployments SET state = 'Failed', last_error = %s WHERE deployment_id = %s;",
-                        ("Failed to enqueue to Redis", deployment_id),
-                    )
-                conn.commit()
-        except Exception:
-            pass
-        raise HTTPException(
-            status_code=500, detail="Failed to enqueue deployment")
 
     log_audit_event(
         project_id=project_id,
@@ -673,22 +697,27 @@ def rollback_deployment(request: Request, project_id: str, project: dict = Depen
                 last_good['image_uri'], last_good['replicas'], last_good['port']
             ))
             cur.fetchone()
+
+            # Transactional outbox
+            payload = {
+                "deployment_id": deployment_id,
+                "project_id":    project_id,
+                "repo_url":      last_good['repo_url'],
+                "branch":        "main",
+                "image_name":    last_good['image_uri'],
+                "queued_at":     str(time.time()),
+                "retries":       "0",
+                "is_rollback":   "true",
+            }
+            cur.execute(
+                "INSERT INTO outbox_events (stream_name, event_type, payload) VALUES (%s, %s, %s);",
+                (STREAM_NAME, "deploy", json.dumps(payload))
+            )
         conn.commit()
 
-    # Publish state update to Redis
+    # Publish state update to Redis for websocket (xadd is handled by outbox_relay)
     try:
         r = get_redis()
-        # Fix 1: Insert state as Queued, and queue to worker stream
-        r.xadd(STREAM_NAME, {
-            "deployment_id": deployment_id,
-            "project_id":    project_id,
-            "repo_url":      last_good['repo_url'],
-            "branch":        "main",
-            "image_name":    last_good['image_uri'],
-            "queued_at":     str(time.time()),
-            "retries":       "0",
-            "is_rollback":   "true",
-        }, maxlen=10000)
         r.publish(f"shipzen:status:{deployment_id}", json.dumps(
             {"state": "Queued", "last_error": None}))
     except Exception as e:

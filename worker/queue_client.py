@@ -36,8 +36,10 @@ class QueueClient:
 
     def add_to_dlq(self, message_id, data):
         """Move message to DLQ and ACK it from main stream."""
-        self.r.xadd(self.dlq_stream, data)
-        self.ack_message(message_id)
+        pipe = self.r.pipeline()
+        pipe.xadd(self.dlq_stream, data)
+        pipe.xack(self.stream, self.group, message_id)
+        pipe.execute()
         # Fix #24: was print(), now uses logger
         logger.warning(f"Message {message_id} moved to DLQ")
 

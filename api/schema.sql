@@ -56,6 +56,11 @@ CREATE INDEX IF NOT EXISTS idx_deployments_project_id ON deployments(project_id)
 CREATE INDEX IF NOT EXISTS idx_deployments_state ON deployments(state);
 CREATE INDEX IF NOT EXISTS idx_deployments_updated_at ON deployments(updated_at DESC);
 
+-- Partial unique index to enforce exactly one active deployment per project (Finding 4)
+CREATE UNIQUE INDEX idx_deployments_one_active_per_project 
+ON deployments (project_id) 
+WHERE state IN ('Queued', 'Building', 'Deploying', 'Verifying');
+
 -- Builds Table
 CREATE TABLE IF NOT EXISTS builds (
     build_id VARCHAR(255) PRIMARY KEY,
@@ -70,6 +75,17 @@ CREATE TABLE IF NOT EXISTS builds (
 CREATE INDEX IF NOT EXISTS idx_builds_deployment_id ON builds(deployment_id);
 CREATE INDEX IF NOT EXISTS idx_builds_status ON builds(status);
 CREATE INDEX IF NOT EXISTS idx_builds_started_at ON builds(started_at DESC);
+
+-- Outbox Events Table (Finding 3)
+CREATE TABLE IF NOT EXISTS outbox_events (
+    id SERIAL PRIMARY KEY,
+    stream_name VARCHAR(255) NOT NULL,
+    event_type VARCHAR(255) NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_events_created_at ON outbox_events(created_at ASC);
 
 -- Phase 11: Audit Logs (Append-Only)
 CREATE TABLE IF NOT EXISTS audit_logs (
