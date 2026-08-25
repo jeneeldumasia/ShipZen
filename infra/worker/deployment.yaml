@@ -35,7 +35,7 @@ spec:
               protocol: TCP
           env:
             - name: AWS_ROLE_ARN
-              value: "arn:aws:iam::941718376342:role/ShipZenBuilderRole"
+              value: "arn:aws:iam::686333686234:role/ShipZenBuilderRole"
             - name: AWS_WEB_IDENTITY_TOKEN_FILE
               value: "/var/run/secrets/eks.amazonaws.com/serviceaccount/token"
             - name: DATABASE_URL

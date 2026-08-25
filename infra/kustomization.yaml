@@ -12,21 +12,21 @@ resources:
   - ui/
 images:
   - name: shipzen-api
-    newName: 941718376342.dkr.ecr.ap-south-1.amazonaws.com/shipzen/api
+    newName: 686333686234.dkr.ecr.ap-south-1.amazonaws.com/shipzen/api
     newTag: sha-fc3b84e
 
   - name: shipzen-controller
-    newName: 941718376342.dkr.ecr.ap-south-1.amazonaws.com/shipzen/controller
+    newName: 686333686234.dkr.ecr.ap-south-1.amazonaws.com/shipzen/controller
     newTag: sha-fc3b84e
 
   - name: shipzen-worker
-    newName: 941718376342.dkr.ecr.ap-south-1.amazonaws.com/shipzen/worker
+    newName: 686333686234.dkr.ecr.ap-south-1.amazonaws.com/shipzen/worker
     newTag: sha-fc3b84e
 
   - name: shipzen-builder
-    newName: 941718376342.dkr.ecr.ap-south-1.amazonaws.com/shipzen/builder
+    newName: 686333686234.dkr.ecr.ap-south-1.amazonaws.com/shipzen/builder
     newTag: sha-88e93b4
   - name: shipzen-ui
-    newName: 941718376342.dkr.ecr.ap-south-1.amazonaws.com/shipzen/ui
+    newName: 686333686234.dkr.ecr.ap-south-1.amazonaws.com/shipzen/ui
     newTag: sha-fc3b84e
 

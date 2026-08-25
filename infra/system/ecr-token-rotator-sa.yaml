@@ -6,4 +6,4 @@ metadata:
   annotations:
     # IRSA: bind this ServiceAccount to the IAM role that has
     # ecr:GetAuthorizationToken and secretsmanager:PutSecretValue permissions.
-    eks.amazonaws.com/role-arn: arn:aws:iam::941718376342:role/ShipZenECRRotatorRole
+    eks.amazonaws.com/role-arn: arn:aws:iam::686333686234:role/ShipZenECRRotatorRole
