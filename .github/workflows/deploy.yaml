@@ -132,9 +132,9 @@ jobs:
           sleep 10
 
 
-      - name: Wait for Network Load Balancer
+      - name: Wait for Load Balancer
         run: |
-          echo "Waiting for Network Load Balancer to be provisioned by AWS..."
+          echo "Waiting for Load Balancer to be provisioned by AWS..."
           ELAPSED=0
           MAX_WAIT=600
           NLB_URL=""
@@ -142,15 +142,15 @@ jobs:
             # Scan all namespaces for the LoadBalancer service instead of hardcoding the dynamically generated name
             NLB_URL=$(kubectl get svc -A -o jsonpath="{.items[?(@.spec.type=='LoadBalancer')].status.loadBalancer.ingress[0].hostname}" 2>/dev/null | awk '{print $1}')
             if [ -n "$NLB_URL" ]; then
-              echo "NLB is ready: $NLB_URL"
+              echo "Load Balancer is ready: $NLB_URL"
               break
             fi
-            echo "NLB not ready yet (${ELAPSED}s/${MAX_WAIT}s)..."
+            echo "Load Balancer not ready yet (${ELAPSED}s/${MAX_WAIT}s)..."
             sleep 10
             ELAPSED=$((ELAPSED+10))
           done
           if [ -z "$NLB_URL" ]; then
-            echo "Error: NLB was not provisioned in time. Dumping cluster state for debugging..."
+            echo "Error: Load Balancer was not provisioned in time. Dumping cluster state for debugging..."
             kubectl get svc -A || true
             kubectl get gatewayclass -A || true
             kubectl get gateway -A -o yaml || true
