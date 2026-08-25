@@ -59,6 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -66,6 +67,16 @@ jobs:
           # Fetch the very latest commit so we rebase on top of it
           ref: main
           fetch-depth: 0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Update all component tags in kustomization.yaml
         run: |
@@ -77,15 +88,22 @@ jobs:
           import re, os
 
           tag = os.environ["TAG"]
-          components = ["api", "ui", "controller", "worker"]
+          registry = os.environ["ECR_REGISTRY"]
           path = "infra/kustomization.yaml"
 
           with open(path, "r") as f:
               content = f.read()
 
-          # Update each component's newTag using a pattern that matches the
-          # name: / newName: / newTag: block regardless of existing blank lines
-          for c in components:
+          # Update newName for all components (including builder) to avoid hardcoding Account ID
+          for c in ["api", "ui", "controller", "worker", "builder"]:
+              content = re.sub(
+                  rf'(name: shipzen-{c}\n\s+newName:) [^\n]+',
+                  rf'\1 {registry}/shipzen/{c}',
+                  content
+              )
+
+          # Update newTag ONLY for the components built in this workflow
+          for c in ["api", "ui", "controller", "worker"]:
               content = re.sub(
                   rf'(name: shipzen-{c}\n\s+newName:[^\n]+\n\s+newTag:) [^\n]+',
                   rf'\1 {tag}',
@@ -93,7 +111,6 @@ jobs:
               )
 
           # Collapse any run of >2 consecutive blank lines to 1 blank line
-          # to prevent the file from accumulating blank lines on repeated runs
           content = re.sub(r'\n{3,}', '\n\n', content)
 
           with open(path, "w") as f:
@@ -101,6 +118,7 @@ jobs:
           PYEOF
         env:
           TAG: sha-$(echo "${{ github.sha }}" | cut -c1-7)
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
 
       - name: Commit and push tag update
         run: |
