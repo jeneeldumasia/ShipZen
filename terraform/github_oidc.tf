@@ -3,6 +3,6 @@ data "aws_iam_openid_connect_provider" "github" {
 }
 
 data "aws_iam_role" "github_actions" {
-  name = "ShipZenGitHubActionsRole"
+  name = "shipzen-github-actions-role"
 }
 
